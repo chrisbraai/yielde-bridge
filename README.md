@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Yielde Bridge
 
-## Getting Started
+> Local-first master dashboard for Yielde OS — unifies MCP servers, API connectors, webhooks, skills, and audit under one UI at `http://localhost:3030`.
 
-First, run the development server:
+## What it is
+
+Yielde Bridge is the dashboard layer on top of **Yielde OS** (`~/.claude/os/`) and `/operator` (`~/.claude/operator/`). It does not replace either — it provides a human-friendly window into them, plus a new connector hub and skill library.
+
+Three rooms, modelled on Bridgemind's BridgeSpace pattern:
+
+| Room | What you do here |
+|---|---|
+| **Configure** | Register MCP servers, API connectors, webhooks, skills, secret references, capabilities. |
+| **Run** | See active sessions, `/operator` recent runs, webhook deliveries, cost meter, scheduled fires. |
+| **Inspect** | Search audit log, review `yielde-brain/_inbox/` drafts with diff + promote, see capability decisions, skill traces, eval scores. |
+
+## What's live (Phase 0)
+
+- Three-room navigation chrome.
+- **Configure / Skills** panel — reads `~/.claude/skills/` from filesystem, lists every installed skill with provenance badge, opens a per-skill viewer rendering the SKILL.md body with full frontmatter sidebar.
+- All other panels are phase-stamped placeholders describing what they will ship.
+
+See `app/` for the route layout and `lib/skills.ts` for the skill reader.
+
+## Running locally
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# → http://localhost:3030
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Architecture
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+~/.claude/
+├── os/                    Yielde OS substrate (kernel, sessions, audit, capabilities)
+├── operator/              /operator agent registry + runs
+└── skills/
+    └── yielde/  → JUNCTION → C:\Users\chris\yielde-skills\skills\yielde\
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+C:\Users\chris\
+├── yielde-skills\         Hermes-compatible SKILL.md library (public, MIT)
+├── yielde-bridge\         this repo — the dashboard UI
+└── yielde-bridge-config\  registry: mcp.json, api.json, webhook.json, secret-refs.json (private)
+```
 
-## Learn More
+## Stack
 
-To learn more about Next.js, take a look at the following resources:
+Next.js 16 (App Router, Turbopack) · TypeScript · Tailwind v4 · React 19. No client-side state library — Bridge reads filesystem on every render. Phase 3+ adds SQLite for run logs and webhook archive.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Status
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Phase 0 — foundation skills + UI shell. See the Yielde Bridge decision in yielde-brain (pending promotion from `_inbox/`).
 
-## Deploy on Vercel
+## License
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT.

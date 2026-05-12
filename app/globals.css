@@ -1,26 +1,104 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --muted: #18181b;
+  --border: #27272a;
+  --accent: #3b82f6;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Markdown rendering for SKILL.md */
+.prose-skill h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 1.5rem 0 0.75rem;
+  color: #f4f4f5;
+}
+.prose-skill h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.5rem;
+  color: #d4d4d8;
+  border-bottom: 1px solid #27272a;
+  padding-bottom: 0.25rem;
+}
+.prose-skill h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 1rem 0 0.5rem;
+  color: #d4d4d8;
+}
+.prose-skill p {
+  margin: 0.5rem 0;
+  line-height: 1.65;
+  color: #a1a1aa;
+}
+.prose-skill ul,
+.prose-skill ol {
+  margin: 0.5rem 0 0.75rem 1.5rem;
+  color: #a1a1aa;
+}
+.prose-skill ul { list-style-type: disc; }
+.prose-skill ol { list-style-type: decimal; }
+.prose-skill li { margin: 0.25rem 0; line-height: 1.55; }
+.prose-skill code {
+  background: #18181b;
+  border: 1px solid #27272a;
+  padding: 0.05rem 0.35rem;
+  border-radius: 3px;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.85em;
+  color: #e4e4e7;
+}
+.prose-skill pre {
+  background: #09090b;
+  border: 1px solid #27272a;
+  padding: 0.85rem 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+}
+.prose-skill pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 0.85em;
+}
+.prose-skill table {
+  margin: 0.75rem 0;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+.prose-skill th,
+.prose-skill td {
+  border: 1px solid #27272a;
+  padding: 0.35rem 0.65rem;
+  text-align: left;
+}
+.prose-skill th { background: #18181b; color: #e4e4e7; font-weight: 600; }
+.prose-skill strong { color: #e4e4e7; font-weight: 600; }
+.prose-skill a { color: var(--accent); text-decoration: underline; }
+.prose-skill blockquote {
+  border-left: 3px solid #3f3f46;
+  padding-left: 0.85rem;
+  margin: 0.75rem 0;
+  color: #71717a;
+  font-style: italic;
 }
