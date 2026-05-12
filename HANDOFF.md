@@ -6,7 +6,7 @@ Repo HEADs at handoff:
 
 | Repo | HEAD | Branch |
 |---|---|---|
-| `yielde-bridge` | `41ee6c3` | `main` |
+| `yielde-bridge` | `42438ae` | `main` |
 | `yielde-bridge-config` | `fb05d0d` (net-zero after smoke teardown vs `cef0d72`) | `main` |
 | `yielde-brain` | `1e3c646` (Phase 4 draft in `_inbox/`, awaiting `/brain-log promote`) | `master` |
 
@@ -16,7 +16,7 @@ Repo HEADs at handoff:
 
 > Resume Yielde Bridge Phase 5.
 >
-> 1. Read `~/.claude/projects/C--Users-chris/memory/project_yielde_bridge.md` — Phase 0–4 ✅. Run all 11 "Verification on session resume" checks in that file before touching code. Each check carries a content assertion. Confirm `yielde-bridge` HEAD is `41ee6c3` (or descendant), `yielde-bridge-config` HEAD is `fb05d0d`, `yielde-brain` HEAD is `1e3c646` (or descendant).
+> 1. Read `~/.claude/projects/C--Users-chris/memory/project_yielde_bridge.md` — Phase 0–4 ✅. Run all 11 "Verification on session resume" checks in that file before touching code. Each check carries a content assertion. Confirm `yielde-bridge` HEAD is `42438ae` (or descendant), `yielde-bridge-config` HEAD is `fb05d0d`, `yielde-brain` HEAD is `1e3c646` (or descendant).
 > 2. Read `C:\Users\chris\yielde-bridge\HANDOFF.md` (this file) for the Phase 5 plan, hard rules, open follow-ups, and smoke tests.
 > 3. Read `C:\Users\chris\yielde-bridge\AGENTS.md` — Next.js 16 / Turbopack / React 19 quirks plus the load-bearing **rule #3** (Bridge writes via `runtime.db`, never to `yielde-bridge-config/` from server routes).
 > 4. **Do NOT load `~/.claude/CLAUDE.md`'s full brain index unless a task explicitly touches `yielde-platform`, `yielde-site`, a client slug, or co-founder work.** Brain writes still go through `brain-gatekeeper`'s `_inbox/` rules — never edit canonical paths.
