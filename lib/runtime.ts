@@ -305,8 +305,15 @@ export function listDailyCostBuckets(days = 14): DailyCostBucket[] {
          SELECT date(d, '-1 day') FROM day_seq WHERE d > date('now', ?)
        ),
        sess AS (
-         SELECT substr(started_at, 1, 10) AS day, SUM(cost_cents) AS cost_cents
-         FROM sessions GROUP BY day
+         -- Bucket by started_at, falling back to ended_at for close-only kernel
+         -- rows (session.cost emissions from yielde-os-session-stop.ps1 that
+         -- never had a matching session.started). Without COALESCE, those rows
+         -- bucket under day=NULL and silently drop out of the rollup.
+         SELECT substr(COALESCE(started_at, ended_at), 1, 10) AS day,
+                SUM(cost_cents) AS cost_cents
+         FROM sessions
+         WHERE COALESCE(started_at, ended_at) IS NOT NULL
+         GROUP BY day
        ),
        op AS (
          SELECT substr(started_at, 1, 10) AS day, SUM(cost_cents) AS cost_cents
