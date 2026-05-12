@@ -86,7 +86,7 @@ Repo HEADs at handoff:
 - **No raw PII in `webhook_deliveries.body_blob` without a retention plan** — Phase 4 must land redaction before any real-world signed webhook integration goes live.
 - **Brain writes** still go through `brain-gatekeeper`'s `_inbox/` rules.
 - **File-guard pattern** still blocks filenames containing `secrets` (plural). Use singular `secret-resolver.ts`, `secret-refs.json`, etc.
-- **UTF-8 BOM strip in JSON readers** — keep both `lib/sessions.ts` and `lib/config.ts`'s `readJson` BOM-tolerant. Any future JSON reader added under `lib/` should do the same.
+- **UTF-8 BOM strip in JSON readers** — centralized in `lib/json-io.ts`. Use `readJsonOrDefault(path, fallback)` for silent-fallback reads or `readJsonStrict(path)` for throwing reads. New `lib/` JSON readers MUST go through one of these helpers; do not re-implement `readFile + JSON.parse` directly.
 
 ### Verification gate before Phase 4 commit
 
