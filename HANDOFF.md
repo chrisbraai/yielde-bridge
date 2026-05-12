@@ -1,14 +1,14 @@
 # Yielde Bridge — handoff (post Phase 3)
 
-Last session: 2026-05-12, ended after Phase 3 ship + UTF-8-BOM bugfix in `lib/sessions.ts` / `lib/config.ts`. Next session picks up Phase 4 (Inspect room + real skill dispatch + redaction/retention on archived webhook bodies).
+Last session: 2026-05-12, ended after Phase 3 ship + UTF-8 BOM bugfix + extraction of `lib/json-io.ts` (single seam for safe JSON reads). Next session picks up Phase 4 (Inspect room + real skill dispatch + redaction/retention on archived webhook bodies).
 
 Repo HEADs at handoff:
 
 | Repo | HEAD | Branch |
 |---|---|---|
-| `yielde-bridge` | _next commit (this session's Phase 3 ship)_ | `main` |
+| `yielde-bridge` | `7e2a725` | `main` |
 | `yielde-bridge-config` | `fb05d0d` (smoke fixture round-trip, net-zero diff vs `cef0d72`) | `main` |
-| `yielde-brain` | `06c7210` (Phase 3 draft, awaiting `/brain-log promote`) | `master` |
+| `yielde-brain` | `5ca2362` (Phase 3 ship + self-review drafts in `_inbox/`, awaiting `/brain-log promote`) | `master` |
 
 ---
 
@@ -16,14 +16,25 @@ Repo HEADs at handoff:
 
 > Resume Yielde Bridge Phase 4.
 >
-> 1. Read `~/.claude/projects/C--Users-chris/memory/project_yielde_bridge.md` — Phase 0–3 ✅. Run all 9 "Verification on session resume" checks in that file before touching code.
-> 2. Read `C:\Users\chris\yielde-bridge\HANDOFF.md` (this file) for the Phase 4 plan, open follow-ups, and smoke tests.
+> 1. Read `~/.claude/projects/C--Users-chris/memory/project_yielde_bridge.md` — Phase 0–3 ✅. Run all 9 "Verification on session resume" checks in that file before touching code. Confirm `yielde-bridge` HEAD is `7e2a725` (or descendant) and `yielde-bridge-config` HEAD is `fb05d0d`.
+> 2. Read `C:\Users\chris\yielde-bridge\HANDOFF.md` (this file) for the Phase 4 plan, hard rules, open follow-ups, and smoke tests.
 > 3. Read `C:\Users\chris\yielde-bridge\AGENTS.md` — Next.js 16 / Turbopack / React 19 quirks plus the load-bearing **rule #3** (Bridge writes via `runtime.db`, never to `yielde-bridge-config/` from server routes).
-> 4. **Do NOT load `~/.claude/CLAUDE.md`'s full brain index unless a task explicitly touches `yielde-platform`, `yielde-site`, a client slug, or co-founder work.** Brain writes still go through `brain-gatekeeper`'s `_inbox/` rules — never edit canonical paths.
-> 5. Start Phase 4: Inspect room (audit search, `_inbox/` diff+promote, capability decisions, skill traces), real skill dispatch from webhook receiver (turn `target_skill` from logged intent into a real invocation), redaction + retention sweep on `webhook_deliveries.body_blob`, SSE-based real-time tail.
-> 6. At meaningful milestones, write a draft to `yielde-brain/_inbox/YYYY-MM-DD-HHMM-<slug>.md` per the `brain-gatekeeper` schema, commit, and push.
+> 4. **Do NOT load `~/.claude/CLAUDE.md`'s full brain index unless a task explicitly touches `yielde-platform`, `yielde-site`, a client slug, or co-founder work.** This session is repo-local to `yielde-bridge` and `yielde-bridge-config`. Brain writes still go through `brain-gatekeeper`'s `_inbox/` rules — never edit canonical paths (`Decisions/`, `Incidents/`, `Staff/`, `Clients/`, `SOPs/`, `Platform/`, `Site/`, `Glossary.md`, `Backlog.md`, `INDEX.md`, `Alignment.excalidraw.md`).
+> 5. **Hard rules to preserve** (full list in HANDOFF.md § Hard rules):
+>    - Bridge reads-only from `yielde-bridge-config/` — all writes go through `scripts/bridge.mjs` + git, or through `runtime.db`.
+>    - All `lib/` JSON readers MUST go through `lib/json-io.ts` (`readJsonOrDefault` or `readJsonStrict`) — never raw `readFile + JSON.parse`. PowerShell-written files carry a UTF-8 BOM that silently breaks naive readers.
+>    - Webhook secrets resolved per request via `lib/secret-resolver.ts`; never cached.
+>    - File-guard pattern blocks filenames containing `secrets` (plural). Use singular: `secret-resolver.ts`, `secret-refs.json`, etc.
+>    - HTTP 200 ≠ feature working. Verification gates must include a content assertion (regex grep for a known-present substring), not just a status code.
+> 6. Start Phase 4 work:
+>    - `app/inspect/{audit-search,brain-inbox,capability-decisions,skill-traces}/page.tsx` — replace the `PhasePlaceholder` stub.
+>    - Real skill dispatch from `app/api/webhooks/[slug]/route.ts` — turn the logged `target_skill` intent into an actual invocation (likely shell out via `operator-bridge` skill for parity with Tier 2 routing). Add a `dispatch_status` column.
+>    - Redaction + retention sweep on `webhook_deliveries.body_blob` before any real PII can land. Optional per-slug redaction map.
+>    - Real-time `/run/webhook-tail` via SSE endpoint at `/api/webhooks/_stream`.
+>    - Kernel-side cost backfill so `sessions` table stops being empty.
+> 7. At meaningful milestones, write a draft to `yielde-brain/_inbox/YYYY-MM-DD-HHMM-<slug>.md` per the `brain-gatekeeper` schema, commit, and push. Never silent. Never canonical.
 >
-> Work without stopping to ask clarifying questions when the reasonable call is obvious.
+> Work without stopping to ask clarifying questions when the reasonable call is obvious. Use TaskCreate to track multi-step work.
 
 ---
 
@@ -31,9 +42,9 @@ Repo HEADs at handoff:
 
 | Repo | Commits | Highlights |
 |---|---|---|
-| `yielde-bridge` | `72e9f58` → _this commit_ | Run room (5 panels) + SQLite runtime + HMAC webhook receiver + BOM bugfix |
+| `yielde-bridge` | `72e9f58 → 4ba4c09 → c172c37 → c1ca4e6 → 7e2a725` | Run room (5 panels) + SQLite runtime + HMAC webhook receiver + BOM bugfix + `lib/json-io.ts` utility extraction |
 | `yielde-bridge-config` | `cef0d72` → `fb05d0d` | smoke fixture round-trip — 4 commits, net-zero |
-| `yielde-brain` | `06c7210` | `_inbox/2026-05-12-1644-yielde-bridge-phase-3-shipped.md` |
+| `yielde-brain` | `aafcebb → 06c7210 → 5ca2362` | `_inbox/2026-05-12-1644-yielde-bridge-phase-3-shipped.md` + `_inbox/2026-05-12-1722-yielde-bridge-phase-3-self-review.md` |
 
 **Files in `yielde-bridge` that landed this phase:**
 
@@ -46,7 +57,8 @@ Repo HEADs at handoff:
 - `app/api/webhooks/[slug]/route.ts` — HMAC-SHA256 receiver with `timingSafeEqual`. Accepts `x-signature`, `x-hub-signature-256`, or `x-yielde-signature`; strips `sha256=` prefix. Persists every delivery (accepted **and** rejected) to `webhook_deliveries`.
 - `scripts/probe-runtime.mjs` — diagnostic; prints table list + row counts + recent operator runs and deliveries.
 - `scripts/smoke-webhook.mjs` — end-to-end smoke; signed accept, tampered reject, no-sig reject, unknown-slug reject. Reads `SMOKE_WEBHOOK_SECRET` from env.
-- `lib/sessions.ts` + `lib/config.ts` — UTF-8 BOM strip before `JSON.parse`. PowerShell-written files (incl. `~/.claude/os/sessions.json`) carry a BOM that vanilla `JSON.parse` rejects. Applied defensively to both readers since registries could land BOM'd too.
+- **`lib/json-io.ts` (self-review extraction)** — centralized BOM-safe JSON read. Exports `stripBom(s)`, `readJsonOrDefault(path, fallback)`, `readJsonStrict(path)`. `lib/config.ts`, `lib/sessions.ts`, and `lib/usage.ts` all route through it; no raw `readFile + JSON.parse` left under `lib/`.
+- **Verification-loop lesson encoded**: `/run/sessions` shipped initially returning HTTP 200 while rendering the empty state (BOM bug). New invariant: every Run/Configure panel verification gate must include a content assertion, not just `curl -o /dev/null -w "%{http_code}"`.
 
 ---
 
@@ -180,3 +192,25 @@ node scripts/bridge.mjs remove secret-ref smoke-webhook-secret
 
 - **Phase 5 — Co-founder rollout.** Node-only CLI fallback for Devon/Lyell, GitHub-issue handoff skill for capability escalation.
 - **Phase 6 — Innovation tier.** Skill provenance graph, eval harness, curator with Chris-approve, bulk Hermes import.
+
+---
+
+## Appendix: standards encoded in this handoff
+
+Anything below this line is enforcement-grade — the resume prompt and Phase 4 verification gate must keep these intact, since they were earned the hard way over Phases 0–3:
+
+1. **Two trust roots only.** Repo-local sessions stay in `yielde-bridge` + `yielde-bridge-config`. The full Yielde brain index loads only when a request touches `yielde-platform`, `yielde-site`, a client slug, or co-founder work.
+2. **Three repos, three roles.** `yielde-skills` (public, MIT, content). `yielde-bridge` (public, UI + runtime). `yielde-bridge-config` (private, registry). Never blur the lines.
+3. **Bridge writes through two surfaces only.** Registry mutations via `scripts/bridge.mjs` + git. Runtime state via `lib/runtime.ts` → `~/.claude/bridge/runtime/runtime.db`. Server routes never touch `yielde-bridge-config/`.
+4. **`lib/json-io.ts` is the single seam for JSON reads.** PowerShell-written files have a BOM. `readJsonOrDefault` and `readJsonStrict` strip it. Raw `readFile + JSON.parse` is forbidden under `lib/`.
+5. **Webhook secrets resolved per request, never cached.** `lib/secret-resolver.ts` is the only seam. `env` provider works today; `infisical` / `os-keychain` / `gh-secret` throw typed `SecretResolveError` so the route returns clean 503 (never silently passes).
+6. **File-guard pattern blocks `secrets` (plural).** Singular only: `secret-resolver.ts`, `secret-refs.json`. Same pattern that forced `rotate-secrets` → `cred-rotation` in `/operator`.
+7. **`force-dynamic` on every server page that reads state.** Filesystem and `runtime.db` change between requests.
+8. **HTTP 200 ≠ feature working.** Verification gates need content assertions, not status-code-only checks.
+9. **Brain protocol: `_inbox/` only.** Drafts via `brain-gatekeeper` schema. `/brain-log promote` is Chris-only; agents must never promote.
+10. **Never silent.** Every significant change → a brain draft. Every brain draft → committed and pushed.
+11. **React 19 + Next 16 quirks:** server components can be lint-flagged for impure calls during render (`Date.now()`, etc.). Use SQL-side computation or hoist purity-violating calls to non-rendered helpers.
+12. **`better-sqlite3` is sync.** Wrap reads inside `force-dynamic` pages. Wrap writes in single transactions.
+13. **No raw PII in `webhook_deliveries.body_blob`** until Phase 4 lands a redaction map + retention sweep.
+
+If any future change weakens one of these, propose an explicit ADR-style entry in a brain draft before shipping.
