@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { listSkills } from "@/lib/skills";
+import { ImportHermesDialog } from "@/components/import-hermes-dialog";
+import { UsageSparkline } from "@/components/usage-sparkline";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +18,7 @@ export default async function SkillsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            disabled
-            title="Coming in Phase 1"
-            className="px-3 py-1.5 text-xs rounded-md border border-zinc-800 text-zinc-500 cursor-not-allowed"
-          >
-            + Import from Hermes URL
-          </button>
+          <ImportHermesDialog />
           <button
             disabled
             title="Coming in Phase 6"
@@ -47,6 +43,7 @@ export default async function SkillsPage() {
                 <th className="px-4 py-2.5 text-left">Name</th>
                 <th className="px-4 py-2.5 text-left">Description</th>
                 <th className="px-4 py-2.5 text-left">Provenance</th>
+                <th className="px-4 py-2.5 text-left">14-day</th>
                 <th className="px-4 py-2.5 text-right">Uses</th>
                 <th className="px-4 py-2.5 text-right">Version</th>
               </tr>
@@ -72,6 +69,9 @@ export default async function SkillsPage() {
                   </td>
                   <td className="px-4 py-2.5">
                     <ProvenanceBadge provenance={s.provenance} />
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <UsageSparkline data={s.history ?? []} />
                   </td>
                   <td className="px-4 py-2.5 text-right text-zinc-500 font-mono tabular-nums">
                     {s.uses ?? 0}

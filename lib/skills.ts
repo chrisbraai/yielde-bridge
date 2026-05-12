@@ -46,6 +46,7 @@ export type SkillSummary = {
   version: string;
   uses?: number;
   lastUsed?: string | null;
+  history?: number[];
 };
 
 /** Naive but durable YAML frontmatter parser — handles strings, ints, bools, flat arrays, and `|` blocks. */
@@ -141,29 +142,26 @@ export async function listSkills(opts?: { category?: string }): Promise<SkillSum
   const root = skillsRoot();
   const out: SkillSummary[] = [];
 
-  // Try to read usage telemetry sidecar
-  let usage: Record<string, { uses?: number; last_used?: string }> = {};
-  try {
-    const usageRaw = await readFile(join(root, ".usage.json"), "utf8");
-    const parsed = JSON.parse(usageRaw);
-    usage = parsed.skills || {};
-  } catch {
-    // OK — no telemetry yet
-  }
+  const { readUsage, historySeries } = await import("./usage");
+  const usageFile = await readUsage();
+  const usage = usageFile.skills;
 
   for await (const entry of walkSkills(root)) {
     if (opts?.category && entry.category !== opts.category) continue;
     const src = await readFile(entry.path, "utf8");
     const { fm } = parseFrontmatter(src);
+    const skillName = fm.name || entry.name;
+    const u = usage[skillName];
     out.push({
       category: entry.category,
-      name: fm.name || entry.name,
+      name: skillName,
       description: fm.description || "",
       provenance: (fm.provenance as string) || "unknown",
       pinned: fm.pinned === true,
       version: (fm.version as string) || "0.0.0",
-      uses: usage[fm.name]?.uses ?? 0,
-      lastUsed: usage[fm.name]?.last_used ?? null,
+      uses: u?.uses ?? 0,
+      lastUsed: u?.last_used ?? null,
+      history: historySeries(u),
     });
   }
 
