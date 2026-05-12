@@ -38,6 +38,15 @@ export default async function SkillGraphPage() {
         hint={`${graph.stats.totalEdges} edges · ${graph.stats.bidirectionalCount} bidirectional · ${graph.stats.isolatedCount} isolated · ${graph.stats.orphanRefCount} orphan refs`}
       />
 
+      {nodes.length === 0 ? (
+        <div className="border border-zinc-800 rounded-lg p-10 text-center bg-zinc-950">
+          <div className="text-sm text-zinc-400">No skills found under <code className="text-zinc-300">~/.claude/skills/</code>.</div>
+          <div className="text-xs text-zinc-600 mt-2">
+            Either the skills root is empty, or the <code>yielde/</code> and <code>hermes/</code> junctions are not wired.
+            Run <code className="text-zinc-500">/configure/skills</code> first to verify.
+          </div>
+        </div>
+      ) : (
       <div className="grid grid-cols-[1fr_320px] gap-6">
         <div className="space-y-6">
           <section>
@@ -194,6 +203,7 @@ export default async function SkillGraphPage() {
           )}
         </aside>
       </div>
+      )}
     </div>
   );
 }
