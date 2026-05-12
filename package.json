@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start -p 3030",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "bridge": "node scripts/bridge.mjs"
+  },
+  "bin": {
+    "bridge": "./scripts/bridge.mjs"
   },
   "dependencies": {
     "next": "16.2.6",
