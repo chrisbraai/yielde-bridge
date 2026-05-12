@@ -1,23 +1,23 @@
-# Yielde Bridge — handoff (post Phase 5)
+# Yielde Bridge — handoff (post Phase 6)
 
-Last session: 2026-05-12, ended after Phase 5 ship (queue worker + kernel `session.cost` producer + co-founder Tier-2 fallback + badge consolidation). Next session picks up Phase 6 (real cron executor for `webhook-dispatch-sweep`, skill provenance graph, eval harness, pricing JSON extraction, promote the seven brain drafts).
+Last session: 2026-05-12, ended after Phase 6 ship (`runtimes/cron.ps1` adapter + sweeper executor + pricing JSON extraction + session-cost log sink + skill provenance graph + eval harness scaffold). Next session picks up Phase 7 (automated eval grading, scheduled `webhook-dispatch-sweep` via `cron.ps1 -Action register`, bulk Hermes import, curator with Chris-approve, brain draft promote queue).
 
-Repo HEADs at handoff:
+Repo HEADs at handoff (pre-Phase-6 commit; update after push):
 
 | Repo | HEAD | Branch |
 |---|---|---|
-| `yielde-bridge` | `1dfca58` | `main` |
+| `yielde-bridge` | post-Phase-6 commit (Phase 5 head was `72fe1e8`/`1dfca58`) | `main` |
 | `yielde-bridge-config` | `fb05d0d` (content-identical descendants after smoke churn are acceptable) | `main` |
-| `yielde-skills` | `71d0556` | `main` |
-| `yielde-brain` | `05d66f0` (Phase 5 draft in `_inbox/`, awaiting `/brain-log promote`) | `master` |
+| `yielde-skills` | post-Phase-6 commit (Phase 5 head was `71d0556`) | `main` |
+| `yielde-brain` | post-Phase-6 commit (Phase 5 head was `af44810`) | `master` |
 
 ---
 
 ## Handoff prompt (paste into a fresh Claude Code session)
 
-> Resume Yielde Bridge Phase 6.
+> Resume Yielde Bridge Phase 7.
 >
-> 1. Read `~/.claude/projects/C--Users-chris/memory/project_yielde_bridge.md` — Phase 0–5 ✅. Run all 14 "Verification on session resume" checks in that file before touching code. Each check carries a content assertion. Confirm `yielde-bridge` HEAD is `1dfca58` (or descendant), `yielde-bridge-config` HEAD content-identical to `fb05d0d`, `yielde-skills` HEAD is `71d0556` (or descendant), `yielde-brain` HEAD is `05d66f0` (or descendant).
+> 1. Read `~/.claude/projects/C--Users-chris/memory/project_yielde_bridge.md` — Phase 0–6 ✅. Run all 14 "Verification on session resume" checks in that file before touching code. Confirm `yielde-bridge` is at the Phase 6 head (or descendant), `yielde-bridge-config` content-identical to `fb05d0d`, `yielde-skills` at the Phase 6 head (or descendant), `yielde-brain` at the Phase 6 head (or descendant — eight `_inbox/` drafts awaiting `/brain-log promote`).
 > 2. Read `C:\Users\chris\yielde-bridge\HANDOFF.md` (this file) for the Phase 6 plan, hard rules, open follow-ups, and smoke tests.
 > 3. Read `C:\Users\chris\yielde-bridge\AGENTS.md` — Next.js 16 / Turbopack / React 19 quirks plus the load-bearing **rule #3** (Bridge writes via `runtime.db` + dispatch queue, never to `yielde-bridge-config/` from server routes).
 > 4. **Do NOT load `~/.claude/CLAUDE.md`'s full brain index unless a task explicitly touches `yielde-platform`, `yielde-site`, a client slug, or co-founder work.** Brain writes still go through `brain-gatekeeper`'s `_inbox/` rules — never edit canonical paths.
@@ -198,10 +198,10 @@ node scripts/record-session-close.mjs --id <session_id> --ended-at <ISO> --model
 
 ---
 
-## Phase 6+ on the radar
+## Phase 7+ on the radar
 
-- **Phase 6 — Real cron executor + pricing extraction + innovation tier.** `runtimes/cron.ps1` so `/operator deploy webhook-dispatch-sweep` runs the sweeper on schedule. Sweeper actually invokes `/operator deploy <target>` instead of just recording intent. Pricing table extracted to `~/.claude/bridge/cli/pricing.json`. Skill provenance graph, eval harness, curator with Chris-approve.
-- **Phase 7+ — Open.** Bulk Hermes import. Multi-machine sync (Devon/Lyell operator state replication). External webhook outbound (we have inbound + dispatch; outbound is half-stubbed in `webhook-out` registry).
+- **Phase 7 — Automated eval grading + bulk Hermes import + curator.** Phase 6 ships discovery + raw stdout capture. Phase 7 adds a rubric-based grader (probably `claude -p` reading `expected.md` + a case's stdout) with a pre-run cost cap. Schedule `webhook-dispatch-sweep` for real via `cron.ps1 -Action register`. Bulk import a Hermes batch (10–20 skills) once curator-with-Chris-approve is in place.
+- **Phase 8+ — Open.** Multi-machine sync (Devon/Lyell operator state replication). External webhook outbound (we have inbound + dispatch; outbound is half-stubbed in `webhook-out` registry).
 
 ---
 

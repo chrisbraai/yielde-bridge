@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "comment": "Anthropic public list price in cents per 1,000,000 tokens. Read by ~/.claude/bridge/cli/emit-session-cost.mjs (via the yielde-bridge/scripts junction) and the future model-router skill. cache_read = 10% of input, cache_create = 125% of input.",
+  "updated": "2026-05-12",
+  "models": {
+    "claude-opus-4-7":   { "input": 1500, "output": 7500, "cacheRead": 150, "cacheCreate": 1875 },
+    "claude-opus-4-6":   { "input": 1500, "output": 7500, "cacheRead": 150, "cacheCreate": 1875 },
+    "claude-sonnet-4-6": { "input":  300, "output": 1500, "cacheRead":  30, "cacheCreate":  375 },
+    "claude-sonnet-4-5": { "input":  300, "output": 1500, "cacheRead":  30, "cacheCreate":  375 },
+    "claude-haiku-4-5":  { "input":  100, "output":  500, "cacheRead":  10, "cacheCreate":  125 },
+    "claude-haiku-4-4":  { "input":  100, "output":  500, "cacheRead":  10, "cacheCreate":  125 }
+  }
+}

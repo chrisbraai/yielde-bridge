@@ -2,16 +2,18 @@ import Link from "next/link";
 import { auditTotalLines, auditEventCounts, listAuditEvents } from "@/lib/audit";
 import { listBrainInboxDrafts } from "@/lib/brain-inbox";
 import { readUsage } from "@/lib/usage";
+import { buildSkillGraph } from "@/lib/skill-graph";
 
 export const dynamic = "force-dynamic";
 
 export default async function InspectOverviewPage() {
-  const [total, eventCounts, drafts, blocked, usage] = await Promise.all([
+  const [total, eventCounts, drafts, blocked, usage, graph] = await Promise.all([
     auditTotalLines(),
     auditEventCounts(),
     listBrainInboxDrafts(),
     listAuditEvents({ event: "capability.blocked", limit: 1000 }),
     readUsage(),
+    buildSkillGraph(),
   ]);
 
   const skillCount = Object.keys(usage.skills).length;
@@ -30,7 +32,7 @@ export default async function InspectOverviewPage() {
         </p>
       </header>
 
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-5 gap-4 mb-8">
         <StatCard
           href="/inspect/audit-search"
           label="Audit entries"
@@ -54,6 +56,12 @@ export default async function InspectOverviewPage() {
           label="Skills with use"
           value={skillCount}
           sub={`${totalUses} total uses`}
+        />
+        <StatCard
+          href="/inspect/skill-graph"
+          label="Skill graph edges"
+          value={graph.stats.totalEdges}
+          sub={`${graph.stats.totalNodes} nodes · ${graph.stats.orphanRefCount} orphan refs`}
         />
       </div>
 

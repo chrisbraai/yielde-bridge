@@ -21,19 +21,46 @@
 import { readFileSync, existsSync, appendFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 
 // ---------- Pricing (cents per 1M tokens) ----------
-// Anthropic public pricing as of 2026. Cache_read = 10% of input, cache_create = 125% of input.
-// Update this table when pricing changes.
-const PRICING_CENTS_PER_MILLION = {
+// Source of truth: pricing.json next to this script (also reachable via the
+// ~/.claude/bridge/cli/ junction at ~/.claude/bridge/cli/pricing.json). Phase 6c moved the
+// table out so the future model-router skill can read the same JSON. If the file is missing
+// (fresh machine, junction not wired), we fall back to a minimal embedded table so kernel
+// cost telemetry never silently zeroes.
+const FALLBACK_PRICING = {
   "claude-opus-4-7":   { input: 1500, output: 7500, cacheRead: 150, cacheCreate: 1875 },
-  "claude-opus-4-6":   { input: 1500, output: 7500, cacheRead: 150, cacheCreate: 1875 },
   "claude-sonnet-4-6": { input:  300, output: 1500, cacheRead:  30, cacheCreate:  375 },
-  "claude-sonnet-4-5": { input:  300, output: 1500, cacheRead:  30, cacheCreate:  375 },
   "claude-haiku-4-5":  { input:  100, output:  500, cacheRead:  10, cacheCreate:  125 },
-  "claude-haiku-4-4":  { input:  100, output:  500, cacheRead:  10, cacheCreate:  125 },
 };
+
+function stripBom(s) { return s.charCodeAt(0) === 0xfeff ? s.slice(1) : s; }
+
+function loadPricing() {
+  const localDir = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    process.env.YIELDE_BRIDGE_PRICING_JSON,
+    join(localDir, "pricing.json"),
+    join(homedir(), ".claude", "bridge", "cli", "pricing.json"),
+  ].filter(Boolean);
+  for (const path of candidates) {
+    if (!existsSync(path)) continue;
+    try {
+      const raw = stripBom(readFileSync(path, "utf8"));
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && parsed.models && typeof parsed.models === "object") {
+        return { table: parsed.models, source: path };
+      }
+    } catch {
+      // ignore, try next
+    }
+  }
+  return { table: FALLBACK_PRICING, source: "fallback-embedded" };
+}
+
+const { table: PRICING_CENTS_PER_MILLION, source: PRICING_SOURCE } = loadPricing();
 
 function priceFor(model) {
   if (!model) return null;
@@ -109,6 +136,24 @@ function appendAuditEvent(event) {
   appendFileSync(auditPath, JSON.stringify(event) + "\n", "utf8");
 }
 
+/**
+ * Phase 6d: stop-hook log sink. The Stop hook fires emit-session-cost.mjs as a hidden
+ * background process and intentionally throws away its stderr. To address that observability
+ * gap, append a single JSON line per invocation to ~/.claude/bridge/logs/session-cost.log so
+ * any failure is surfaceable. Soft-fails: a log-append error never blocks the script.
+ */
+function appendSessionCostLog(record) {
+  const logPath = process.env.YIELDE_BRIDGE_SESSION_COST_LOG
+    ?? join(homedir(), ".claude", "bridge", "logs", "session-cost.log");
+  try {
+    const dir = dirname(logPath);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    appendFileSync(logPath, JSON.stringify(record) + "\n", "utf8");
+  } catch {
+    // Last-resort fail-soft.
+  }
+}
+
 function upsertSession({ id, endedAt, role, model, tokensIn, tokensOut, costCents }) {
   const dbPath = process.env.YIELDE_BRIDGE_RUNTIME_DB
     ?? join(homedir(), ".claude", "bridge", "runtime", "runtime.db");
@@ -167,6 +212,13 @@ const role = typeof flags.role === "string" ? flags.role : null;
 const usage = aggregateUsage(transcriptPath);
 if (!usage) {
   // Transcript not found — fail-soft.
+  appendSessionCostLog({
+    ts: new Date().toISOString(),
+    session_id: sessionId,
+    status: "skipped",
+    reason: "transcript-missing",
+    transcript_path: transcriptPath,
+  });
   console.log(JSON.stringify({ ok: true, skipped: "transcript-missing", session_id: sessionId, transcript_path: transcriptPath }));
   process.exit(0);
 }
@@ -184,15 +236,19 @@ const event = {
   cache_creation_tokens: usage.cacheCreate,
   cost_cents: costCents,
   transcript_lines: usage.lineCount,
+  pricing_source: PRICING_SOURCE,
 };
 
+let auditErr = null;
 try {
   appendAuditEvent(event);
 } catch (err) {
   // Audit append failure is non-fatal — DB upsert still happens.
+  auditErr = err.message;
   console.error(`emit-session-cost: audit append failed: ${err.message}`);
 }
 
+let dbErr = null;
 try {
   upsertSession({
     id: sessionId,
@@ -204,9 +260,23 @@ try {
     costCents,
   });
 } catch (err) {
+  dbErr = err.message;
   console.error(`emit-session-cost: runtime.db upsert failed: ${err.message}`);
   // Still exit 0 — the audit event is the canonical record; bridge re-derives from audit.jsonl on next sync.
 }
+
+appendSessionCostLog({
+  ts: new Date().toISOString(),
+  session_id: sessionId,
+  status: (auditErr || dbErr) ? "partial" : "ok",
+  model: usage.model,
+  cost_cents: costCents,
+  tokens_in: usage.inTokens,
+  tokens_out: usage.outTokens,
+  pricing_source: PRICING_SOURCE,
+  ...(auditErr ? { audit_error: auditErr } : {}),
+  ...(dbErr ? { db_error: dbErr } : {}),
+});
 
 console.log(JSON.stringify({ ok: true, ...event }));
 process.exit(0);

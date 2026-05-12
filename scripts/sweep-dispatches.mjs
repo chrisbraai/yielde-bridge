@@ -29,8 +29,8 @@
  */
 
 import Database from "better-sqlite3";
-import { readdir, readFile, writeFile, mkdir, rename, appendFile } from "node:fs/promises";
-import { existsSync, mkdirSync } from "node:fs";
+import { readdir, readFile, mkdir, rename, appendFile } from "node:fs/promises";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { spawnSync } from "node:child_process";
@@ -136,6 +136,88 @@ async function handleDryRun(req) {
   };
 }
 
+/**
+ * Phase 6b: real execution. After recording dispatch intent, attempt to actually invoke
+ * the target. Strategy by runtime:
+ *   - cron / mcp-tool        → direct adapter spawn (no LLM cost)
+ *   - claude-subagent / n8n  → spawn `claude -p "/operator deploy <target>"` IFF the
+ *                              YIELDE_BRIDGE_DISPATCH_INVOKE env gate is set
+ *                              (default: deferred to interactive operator)
+ * In all cases the run JSONL gains `dispatch.intent` + `dispatch.invoked` + `operator.run.end`
+ * events (or `dispatch.deferred` if gated off) and the sweeper outcome reflects the real
+ * exit status.
+ */
+function readManifestRuntime(target) {
+  const manifestPath = join(OPERATOR_ROOT, "agents", `${target}.md`);
+  if (!existsSync(manifestPath)) return null;
+  // Naive frontmatter parse — only need `runtime:` and `command:`.
+  let raw;
+  try { raw = stripBom(readFileSync(manifestPath, "utf8")); } catch { return null; }
+  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(raw);
+  if (!m) return null;
+  const fm = {};
+  for (const line of m[1].split(/\r?\n/)) {
+    const kv = /^([a-zA-Z_][\w-]*):\s*(.*)$/.exec(line);
+    if (kv) {
+      let v = kv[2].trim();
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+        v = v.slice(1, -1);
+      }
+      fm[kv[1]] = v;
+    }
+  }
+  return fm;
+}
+
+function invokeRuntimeAdapter(runtime, target, runId, inputsJson, timeoutMs) {
+  // runtime ∈ { 'cron', 'mcp-tool' } → invoke runtimes/<runtime>.ps1
+  const adapter = join(OPERATOR_ROOT, "runtimes", `${runtime}.ps1`);
+  if (!existsSync(adapter)) {
+    return { ok: false, exit: -1, stdout: "", stderr: `runtime adapter missing: ${adapter}`, structured: null };
+  }
+  const args = [
+    "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", adapter,
+    "-Action", "run", "-Name", target, "-RunId", runId,
+  ];
+  if (inputsJson) { args.push("-InputsJson", inputsJson); }
+  const res = spawnSync("powershell.exe", args, { encoding: "utf8", timeout: timeoutMs, windowsHide: true });
+  let structured = null;
+  if (res.stdout) {
+    const trimmed = res.stdout.trim();
+    if (trimmed.startsWith("{")) {
+      try { structured = JSON.parse(trimmed); } catch { /* leave null */ }
+    }
+  }
+  // cron.ps1 is fail-soft (always exits 0) and surfaces real failures via
+  // structured.ok === false. Honour that so we don't silently report success
+  // when the adapter reported a missing manifest or other error.
+  const adapterReportedFailure = structured && typeof structured === "object" && structured.ok === false;
+  const exit = res.status ?? -1;
+  return {
+    ok: exit === 0 && !adapterReportedFailure,
+    exit,
+    stdout: res.stdout ?? "",
+    stderr: stripLibuvNoise(res.stderr ?? ""),
+    structured,
+  };
+}
+
+function invokeClaudeP(target, runId, inputs, timeoutMs) {
+  // Build "/operator deploy <target> --key=value ..."
+  const inputPairs = inputs && typeof inputs === "object"
+    ? Object.entries(inputs).map(([k, v]) => `--${k}=${v}`)
+    : [];
+  const slash = `/operator deploy ${target}` + (inputPairs.length ? ` ${inputPairs.join(" ")}` : "");
+  const res = spawnSync("claude", ["-p", slash], { encoding: "utf8", timeout: timeoutMs, windowsHide: true });
+  return {
+    ok: res.status === 0,
+    exit: res.status ?? -1,
+    stdout: res.stdout ?? "",
+    stderr: stripLibuvNoise(res.stderr ?? ""),
+    structured: null,
+  };
+}
+
 async function handleOperatorDeploy(req) {
   const agentDir = join(OPERATOR_ROOT, "agents");
   const manifest = join(agentDir, `${req.target_skill}.md`);
@@ -157,27 +239,94 @@ async function handleOperatorDeploy(req) {
   const runsDir = join(OPERATOR_ROOT, "runs", req.target_skill);
   if (!existsSync(runsDir)) await mkdir(runsDir, { recursive: true });
   const runFile = join(runsDir, `${req.run_id}.jsonl`);
-  const now = new Date().toISOString();
-  const events = [
-    {
-      ts: now,
-      event: "dispatch.intent",
-      source: "yielde-bridge.webhook",
-      delivery_id: req.delivery_id,
-      slug: req.slug,
-      run_id: req.run_id,
-      payload_hash: req.payload_hash,
-    },
-    {
-      ts: now,
-      event: "dispatch.queued",
-      note: "Sweeper recorded dispatch intent. Actual /operator deploy invocation is the caller's responsibility (cron or interactive).",
-    },
-  ];
-  await writeFile(runFile, events.map((e) => JSON.stringify(e)).join("\n") + "\n", "utf8");
+  const intentEvent = {
+    ts: new Date().toISOString(),
+    event: "dispatch.intent",
+    source: "yielde-bridge.webhook",
+    delivery_id: req.delivery_id,
+    slug: req.slug,
+    run_id: req.run_id,
+    payload_hash: req.payload_hash,
+  };
+  // Append intent (atomic-ish, JSONL accumulates).
+  await appendFile(runFile, JSON.stringify(intentEvent) + "\n", "utf8");
+
+  const fm = readManifestRuntime(req.target_skill);
+  const runtime = fm?.runtime ?? "unknown";
+  const timeoutMs = Math.max(60_000, Number(process.env.YIELDE_BRIDGE_DISPATCH_TIMEOUT_SEC || 300) * 1000);
+  const inputsObj = (req.inputs && typeof req.inputs === "object") ? req.inputs : {};
+  const inputsJson = JSON.stringify(inputsObj);
+
+  const invokeAllowedForLlm = process.env.YIELDE_BRIDGE_DISPATCH_INVOKE === "1";
+  const maxCostCents = Number(process.env.YIELDE_BRIDGE_DISPATCH_MAX_COST_CENTS || 0);
+
+  let outcome;
+  if (runtime === "cron" || runtime === "mcp-tool") {
+    log(`invoking ${runtime} adapter for ${req.target_skill}`);
+    outcome = invokeRuntimeAdapter(runtime, req.target_skill, req.run_id, inputsJson, timeoutMs);
+  } else if (runtime === "claude-subagent" || runtime === "n8n-workflow") {
+    if (!invokeAllowedForLlm) {
+      // Gate off — record deferred and stop.
+      const deferredEvent = {
+        ts: new Date().toISOString(),
+        event: "dispatch.deferred",
+        runtime,
+        reason: "YIELDE_BRIDGE_DISPATCH_INVOKE not set; LLM-cost runtimes require explicit opt-in",
+      };
+      await appendFile(runFile, JSON.stringify(deferredEvent) + "\n", "utf8");
+      return {
+        status: "succeeded",
+        log: `dispatch.intent recorded at ${runFile}; runtime=${runtime} deferred (set YIELDE_BRIDGE_DISPATCH_INVOKE=1 to invoke)`,
+      };
+    }
+    if (!maxCostCents) {
+      const deferredEvent = {
+        ts: new Date().toISOString(),
+        event: "dispatch.deferred",
+        runtime,
+        reason: "YIELDE_BRIDGE_DISPATCH_MAX_COST_CENTS not set; refusing to invoke LLM runtime without an explicit cost cap",
+      };
+      await appendFile(runFile, JSON.stringify(deferredEvent) + "\n", "utf8");
+      return {
+        status: "succeeded",
+        log: `dispatch.intent recorded at ${runFile}; runtime=${runtime} deferred (cost cap missing)`,
+      };
+    }
+    log(`invoking claude -p for ${req.target_skill} (cost cap ${maxCostCents}c)`);
+    outcome = invokeClaudeP(req.target_skill, req.run_id, inputsObj, timeoutMs);
+  } else {
+    return {
+      status: "failed",
+      log: `unknown runtime '${runtime}' for ${req.target_skill}; intent recorded at ${runFile}`,
+    };
+  }
+
+  const invokedEvent = {
+    ts: new Date().toISOString(),
+    event: "dispatch.invoked",
+    runtime,
+    exit_code: outcome.exit,
+    ok: outcome.ok,
+    stdout_tail: (outcome.stdout || "").slice(-4000),
+    stderr_tail: (outcome.stderr || "").slice(-2000),
+    structured: outcome.structured ?? null,
+  };
+  await appendFile(runFile, JSON.stringify(invokedEvent) + "\n", "utf8");
+
+  const endEvent = {
+    ts: new Date().toISOString(),
+    event: "operator.run.end",
+    status: outcome.ok ? "success" : "error",
+    source: "sweep-dispatches",
+    exit_code: outcome.exit,
+  };
+  await appendFile(runFile, JSON.stringify(endEvent) + "\n", "utf8");
+
   return {
-    status: "succeeded",
-    log: `operator-deploy intent recorded at ${runFile}`,
+    status: outcome.ok ? "succeeded" : "failed",
+    log: outcome.ok
+      ? `operator-deploy ${runtime} ok (exit=${outcome.exit}); run log ${runFile}`
+      : `operator-deploy ${runtime} failed (exit=${outcome.exit}): ${(outcome.stderr || outcome.stdout || "").slice(0, 300)}`,
   };
 }
 

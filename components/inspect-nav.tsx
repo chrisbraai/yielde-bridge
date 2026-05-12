@@ -1,14 +1,16 @@
 import { listBrainInboxDrafts } from "@/lib/brain-inbox";
 import { auditTotalLines, listAuditEvents } from "@/lib/audit";
 import { readUsage } from "@/lib/usage";
+import { buildSkillGraph } from "@/lib/skill-graph";
 import { InspectNavLinks, type InspectPanel } from "./inspect-nav-links";
 
 export async function InspectNav() {
-  const [drafts, audit, blockedEvents, usage] = await Promise.all([
+  const [drafts, audit, blockedEvents, usage, graph] = await Promise.all([
     listBrainInboxDrafts(),
     auditTotalLines(),
     listAuditEvents({ event: "capability.blocked", limit: 1000 }),
     readUsage(),
+    buildSkillGraph(),
   ]);
 
   const panels: InspectPanel[] = [
@@ -17,6 +19,7 @@ export async function InspectNav() {
     { href: "/inspect/brain-inbox", label: "Brain inbox", count: drafts.length },
     { href: "/inspect/capability-decisions", label: "Capability gates", count: blockedEvents.length },
     { href: "/inspect/skill-traces", label: "Skill traces", count: Object.keys(usage.skills).length },
+    { href: "/inspect/skill-graph", label: "Skill graph", count: graph.stats.totalEdges },
   ];
 
   return (
