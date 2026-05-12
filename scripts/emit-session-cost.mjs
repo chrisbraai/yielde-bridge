@@ -23,6 +23,7 @@ import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
+import { stripBom } from "../lib/io-utils.mjs";
 
 // ---------- Pricing (cents per 1M tokens) ----------
 // Source of truth: pricing.json next to this script (also reachable via the
@@ -35,8 +36,6 @@ const FALLBACK_PRICING = {
   "claude-sonnet-4-6": { input:  300, output: 1500, cacheRead:  30, cacheCreate:  375 },
   "claude-haiku-4-5":  { input:  100, output:  500, cacheRead:  10, cacheCreate:  125 },
 };
-
-function stripBom(s) { return s.charCodeAt(0) === 0xfeff ? s.slice(1) : s; }
 
 function loadPricing() {
   const localDir = dirname(fileURLToPath(import.meta.url));

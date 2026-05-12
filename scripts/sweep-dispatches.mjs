@@ -29,11 +29,16 @@
  */
 
 import Database from "better-sqlite3";
-import { readdir, readFile, mkdir, rename, appendFile } from "node:fs/promises";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { readdir, mkdir, rename, appendFile } from "node:fs/promises";
+import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { spawnSync } from "node:child_process";
+import {
+  stripLibuvNoise,
+  readManifestRuntime as readManifestRuntimeShared,
+  readJsonStrict,
+} from "../lib/io-utils.mjs";
 
 // ---------- arg parsing ----------
 
@@ -76,27 +81,11 @@ const OPERATOR_ROOT =
   ?? join(homedir(), ".claude", "operator");
 
 // ---------- helpers ----------
-
-function stripBom(s) {
-  return s.charCodeAt(0) === 0xfeff ? s.slice(1) : s;
-}
-
-async function readJsonStrict(path) {
-  const src = stripBom(await readFile(path, "utf8"));
-  return JSON.parse(src);
-}
+// `stripBom`, `stripLibuvNoise`, `readManifestRuntime`, `readJsonStrict` are
+// imported from ../lib/io-utils.mjs (canonical, Phase 7 consolidation).
 
 function log(...parts) {
   if (VERBOSE) console.log("[sweep]", ...parts);
-}
-
-function stripLibuvNoise(s) {
-  // Windows libuv UV_HANDLE_CLOSING assertion can sneak into stderr on child shutdown.
-  if (!s) return s;
-  return s
-    .split(/\r?\n/)
-    .filter((line) => !/Assertion failed:.*UV_HANDLE_CLOSING/.test(line))
-    .join("\n");
 }
 
 // ---------- DB ----------
@@ -147,28 +136,6 @@ async function handleDryRun(req) {
  * events (or `dispatch.deferred` if gated off) and the sweeper outcome reflects the real
  * exit status.
  */
-function readManifestRuntime(target) {
-  const manifestPath = join(OPERATOR_ROOT, "agents", `${target}.md`);
-  if (!existsSync(manifestPath)) return null;
-  // Naive frontmatter parse — only need `runtime:` and `command:`.
-  let raw;
-  try { raw = stripBom(readFileSync(manifestPath, "utf8")); } catch { return null; }
-  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(raw);
-  if (!m) return null;
-  const fm = {};
-  for (const line of m[1].split(/\r?\n/)) {
-    const kv = /^([a-zA-Z_][\w-]*):\s*(.*)$/.exec(line);
-    if (kv) {
-      let v = kv[2].trim();
-      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
-        v = v.slice(1, -1);
-      }
-      fm[kv[1]] = v;
-    }
-  }
-  return fm;
-}
-
 function invokeRuntimeAdapter(runtime, target, runId, inputsJson, timeoutMs) {
   // runtime ∈ { 'cron', 'mcp-tool' } → invoke runtimes/<runtime>.ps1
   const adapter = join(OPERATOR_ROOT, "runtimes", `${runtime}.ps1`);
@@ -251,7 +218,7 @@ async function handleOperatorDeploy(req) {
   // Append intent (atomic-ish, JSONL accumulates).
   await appendFile(runFile, JSON.stringify(intentEvent) + "\n", "utf8");
 
-  const fm = readManifestRuntime(req.target_skill);
+  const fm = readManifestRuntimeShared(OPERATOR_ROOT, req.target_skill);
   const runtime = fm?.runtime ?? "unknown";
   const timeoutMs = Math.max(60_000, Number(process.env.YIELDE_BRIDGE_DISPATCH_TIMEOUT_SEC || 300) * 1000);
   const inputsObj = (req.inputs && typeof req.inputs === "object") ? req.inputs : {};
