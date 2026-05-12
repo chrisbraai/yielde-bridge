@@ -36,7 +36,7 @@ const SCHEMA_VERSION = "1.0";
 function parseArgs(argv) {
   const positional = [];
   const flags = {};
-  const multi = new Set(["env-ref"]);
+  const multi = new Set(["env-ref", "redact-key", "redact-pattern"]);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith("--")) {
@@ -255,6 +255,28 @@ async function cmdAddWebhook(slug, flags) {
   if (!["hmac-sha256", "none"].includes(entry.verifySig))
     die(`--verify must be hmac-sha256 or none`);
 
+  if (flags.retention) {
+    const n = parseInt(flags.retention, 10);
+    if (!Number.isFinite(n) || n < 1) die("--retention must be a positive integer");
+    entry.retentionLimit = n;
+  }
+
+  const redactionRules = [];
+  for (const key of flags["redact-key"] || []) {
+    if (typeof key !== "string" || key.length === 0) continue;
+    redactionRules.push({ key });
+  }
+  for (const raw of flags["redact-pattern"] || []) {
+    if (typeof raw !== "string" || raw.length === 0) continue;
+    try {
+      new RegExp(raw);
+    } catch (err) {
+      die(`--redact-pattern invalid regex "${raw}": ${err.message}`);
+    }
+    redactionRules.push({ pattern: raw });
+  }
+  if (redactionRules.length > 0) entry.redactionRules = redactionRules;
+
   const body = await readRegistry("webhook.json");
   body.inbound = body.inbound || {};
   body.inbound[slug] = entry;
@@ -352,6 +374,8 @@ Usage:
   bridge add mcp <name> --transport stdio|sse|http [--command CMD] [--url URL] [--env-ref REF ...]
   bridge add api <name> --base-url URL --auth-ref REF [--auth bearer|api-key|oauth|basic|none] [--rpm N]
   bridge add webhook <slug> --target-skill SKILL --secret-ref REF [--verify hmac-sha256|none]
+                                                                   [--retention N]
+                                                                   [--redact-key KEY ...] [--redact-pattern REGEX ...]
   bridge add webhook-out <name> --url URL [--auth-ref REF] [--max-attempts N]
   bridge add secret-ref <name> --provider infisical|os-keychain|env|gh-secret --path PATH
   bridge remove mcp|api|webhook|secret-ref <name>

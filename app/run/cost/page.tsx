@@ -1,5 +1,6 @@
 import { listDailyCostBuckets, runtimeStats } from "@/lib/runtime";
 import { syncOperatorRuns } from "@/lib/operator-runs";
+import { syncSessionsFromAudit } from "@/lib/session-sync";
 import { RegistryHeader } from "@/components/registry-header";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ function fmtUsd(cents: number): string {
 
 export default async function CostPage() {
   await syncOperatorRuns().catch(() => undefined);
+  await syncSessionsFromAudit().catch(() => undefined);
 
   const buckets = listDailyCostBuckets(DAYS);
   const stats = runtimeStats();

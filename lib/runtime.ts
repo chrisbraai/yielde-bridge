@@ -46,6 +46,24 @@ function initSchema(db: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_slug_received
       ON webhook_deliveries(slug, received_at DESC);
+  `);
+
+  // Phase 4: per-delivery dispatch tracking. Idempotent additive migration so existing rows survive.
+  const cols = new Set(
+    (db.pragma("table_info(webhook_deliveries)") as { name: string }[]).map((c) => c.name),
+  );
+  for (const [name, sql] of [
+    ["dispatch_status", "ALTER TABLE webhook_deliveries ADD COLUMN dispatch_status TEXT"],
+    ["dispatch_target", "ALTER TABLE webhook_deliveries ADD COLUMN dispatch_target TEXT"],
+    ["dispatch_run_id", "ALTER TABLE webhook_deliveries ADD COLUMN dispatch_run_id TEXT"],
+    ["dispatched_at", "ALTER TABLE webhook_deliveries ADD COLUMN dispatched_at TEXT"],
+    ["dispatch_log", "ALTER TABLE webhook_deliveries ADD COLUMN dispatch_log TEXT"],
+    ["redaction_applied", "ALTER TABLE webhook_deliveries ADD COLUMN redaction_applied INTEGER NOT NULL DEFAULT 0"],
+  ] as const) {
+    if (!cols.has(name)) db.exec(sql);
+  }
+
+  db.exec(`
 
     CREATE TABLE IF NOT EXISTS operator_runs (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,6 +101,8 @@ function initSchema(db: Database.Database): void {
 
 // ---------- Webhook deliveries ----------
 
+export type DispatchStatus = "queued" | "succeeded" | "failed" | "skipped" | null;
+
 export type WebhookDelivery = {
   id: number;
   slug: string;
@@ -92,6 +112,12 @@ export type WebhookDelivery = {
   status: "accepted" | "rejected" | "error";
   http_code: number;
   reason: string | null;
+  dispatch_status: DispatchStatus;
+  dispatch_target: string | null;
+  dispatch_run_id: string | null;
+  dispatched_at: string | null;
+  dispatch_log: string | null;
+  redaction_applied: number;
 };
 
 export type InsertWebhookDelivery = {
@@ -103,13 +129,14 @@ export type InsertWebhookDelivery = {
   httpCode: number;
   reason: string | null;
   body: Buffer | null;
+  redactionApplied?: boolean;
 };
 
 export function insertWebhookDelivery(d: InsertWebhookDelivery): number {
   const stmt = db().prepare(
     `INSERT INTO webhook_deliveries
-      (slug, received_at, source_ip, payload_hash, status, http_code, reason, body_blob)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      (slug, received_at, source_ip, payload_hash, status, http_code, reason, body_blob, redaction_applied)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const info = stmt.run(
     d.slug,
@@ -120,12 +147,45 @@ export function insertWebhookDelivery(d: InsertWebhookDelivery): number {
     d.httpCode,
     d.reason,
     d.body,
+    d.redactionApplied ? 1 : 0,
   );
   pruneSlugRetention(d.slug);
   return Number(info.lastInsertRowid);
 }
 
-const KEEP_PER_SLUG = 100;
+export type DispatchUpdate = {
+  id: number;
+  status: Exclude<DispatchStatus, null>;
+  target: string;
+  runId: string | null;
+  log: string;
+  dispatchedAt?: string;
+};
+
+export function updateDispatch(u: DispatchUpdate): void {
+  db()
+    .prepare(
+      `UPDATE webhook_deliveries
+       SET dispatch_status = ?,
+           dispatch_target = ?,
+           dispatch_run_id = ?,
+           dispatched_at  = COALESCE(?, dispatched_at, datetime('now')),
+           dispatch_log   = ?
+       WHERE id = ?`,
+    )
+    .run(u.status, u.target, u.runId, u.dispatchedAt ?? null, u.log, u.id);
+}
+
+const DEFAULT_KEEP_PER_SLUG = 100;
+let perSlugRetentionLimits: Map<string, number> = new Map();
+
+export function setRetentionLimits(limits: Map<string, number>): void {
+  perSlugRetentionLimits = limits;
+}
+
+function keepCountForSlug(slug: string): number {
+  return perSlugRetentionLimits.get(slug) ?? DEFAULT_KEEP_PER_SLUG;
+}
 
 function pruneSlugRetention(slug: string): void {
   db()
@@ -138,18 +198,69 @@ function pruneSlugRetention(slug: string): void {
          LIMIT -1 OFFSET ?
        )`,
     )
-    .run(slug, KEEP_PER_SLUG);
+    .run(slug, keepCountForSlug(slug));
 }
+
+/**
+ * Apply per-slug retention sweep across all configured slugs. Returns the number of rows pruned.
+ * Safe to call repeatedly; new rows from incoming webhooks already prune on insert.
+ */
+export function pruneAllRetention(limits: Map<string, number>): number {
+  setRetentionLimits(limits);
+  const slugs = db()
+    .prepare(`SELECT DISTINCT slug FROM webhook_deliveries`)
+    .all() as { slug: string }[];
+  let pruned = 0;
+  for (const { slug } of slugs) {
+    const before = (db()
+      .prepare(`SELECT COUNT(*) AS n FROM webhook_deliveries WHERE slug = ?`)
+      .get(slug) as { n: number }).n;
+    pruneSlugRetention(slug);
+    const after = (db()
+      .prepare(`SELECT COUNT(*) AS n FROM webhook_deliveries WHERE slug = ?`)
+      .get(slug) as { n: number }).n;
+    pruned += before - after;
+  }
+  return pruned;
+}
+
+const WEBHOOK_SELECT = `
+  id, slug, received_at, source_ip, payload_hash, status, http_code, reason,
+  dispatch_status, dispatch_target, dispatch_run_id, dispatched_at, dispatch_log,
+  redaction_applied
+`;
 
 export function listRecentWebhookDeliveries(limit = 100): WebhookDelivery[] {
   return db()
     .prepare(
-      `SELECT id, slug, received_at, source_ip, payload_hash, status, http_code, reason
+      `SELECT ${WEBHOOK_SELECT}
        FROM webhook_deliveries
        ORDER BY received_at DESC, id DESC
        LIMIT ?`,
     )
     .all(limit) as WebhookDelivery[];
+}
+
+export function listWebhookDeliveriesSince(
+  sinceId: number,
+  limit = 100,
+): WebhookDelivery[] {
+  return db()
+    .prepare(
+      `SELECT ${WEBHOOK_SELECT}
+       FROM webhook_deliveries
+       WHERE id > ?
+       ORDER BY id ASC
+       LIMIT ?`,
+    )
+    .all(sinceId, limit) as WebhookDelivery[];
+}
+
+export function maxWebhookDeliveryId(): number {
+  const row = db().prepare(`SELECT MAX(id) AS m FROM webhook_deliveries`).get() as
+    | { m: number | null }
+    | undefined;
+  return row?.m ?? 0;
 }
 
 // ---------- Operator runs (upsert from on-disk JSONL) ----------
@@ -233,6 +344,58 @@ export function listDailyCostBuckets(days = 14): DailyCostBucket[] {
        ORDER BY day_seq.d ASC`,
     )
     .all(startOffset) as DailyCostBucket[];
+}
+
+// ---------- Sessions (kernel-derived) ----------
+
+export type SessionRowDb = {
+  id: string;
+  harness: string | null;
+  role: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  model: string | null;
+  tokens_in: number | null;
+  tokens_out: number | null;
+  cost_cents: number | null;
+  intent: string | null;
+};
+
+export type UpsertSessionRow = SessionRowDb;
+
+export function upsertSession(r: UpsertSessionRow): void {
+  // SQLite UPSERT keeps non-null incoming values and preserves existing ones when new is null,
+  // so a session.started write doesn't blow away the ended_at written by a later session.stopped.
+  db()
+    .prepare(
+      `INSERT INTO sessions (id, harness, role, started_at, ended_at, model,
+                             tokens_in, tokens_out, cost_cents, intent)
+       VALUES (@id, @harness, @role, @started_at, @ended_at, @model,
+               @tokens_in, @tokens_out, @cost_cents, @intent)
+       ON CONFLICT(id) DO UPDATE SET
+         harness    = COALESCE(excluded.harness,    sessions.harness),
+         role       = COALESCE(excluded.role,       sessions.role),
+         started_at = COALESCE(excluded.started_at, sessions.started_at),
+         ended_at   = COALESCE(excluded.ended_at,   sessions.ended_at),
+         model      = COALESCE(excluded.model,      sessions.model),
+         tokens_in  = COALESCE(excluded.tokens_in,  sessions.tokens_in),
+         tokens_out = COALESCE(excluded.tokens_out, sessions.tokens_out),
+         cost_cents = COALESCE(excluded.cost_cents, sessions.cost_cents),
+         intent     = COALESCE(excluded.intent,     sessions.intent)`,
+    )
+    .run(r);
+}
+
+export function listRecentSessionsFromDb(limit = 100): SessionRowDb[] {
+  return db()
+    .prepare(
+      `SELECT id, harness, role, started_at, ended_at, model,
+              tokens_in, tokens_out, cost_cents, intent
+       FROM sessions
+       ORDER BY started_at DESC NULLS LAST
+       LIMIT ?`,
+    )
+    .all(limit) as SessionRowDb[];
 }
 
 export function runtimeStats(): { webhooks: number; operatorRuns: number; sessions: number } {

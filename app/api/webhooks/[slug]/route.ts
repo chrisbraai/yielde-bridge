@@ -2,7 +2,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { listWebhooks } from "@/lib/config";
 import { resolveSecret, SecretResolveError } from "@/lib/secret-resolver";
-import { insertWebhookDelivery } from "@/lib/runtime";
+import {
+  insertWebhookDelivery,
+  setRetentionLimits,
+} from "@/lib/runtime";
+import { redactBody } from "@/lib/redaction";
+import { dispatchAcceptedDelivery } from "@/lib/dispatcher";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,6 +57,15 @@ export async function POST(
   const payloadHash = createHash("sha256").update(bodyBuf).digest("hex");
 
   const { inbound } = await listWebhooks();
+  // Push current retention map down so insert-time pruning honours per-slug overrides.
+  setRetentionLimits(
+    new Map(
+      inbound
+        .filter((h) => typeof h.retentionLimit === "number" && h.retentionLimit! > 0)
+        .map((h) => [h.slug, h.retentionLimit!]),
+    ),
+  );
+
   const hook = inbound.find((w) => w.slug === slug);
   if (!hook) {
     insertWebhookDelivery({
@@ -122,16 +136,35 @@ export async function POST(
     }
   }
 
-  // Phase 3 stops at archive + dispatch intent log. Actual skill invocation is Phase 4.
-  insertWebhookDelivery({
+  // Apply per-slug redaction BEFORE persisting body_blob. Raw body never touches disk if a
+  // redaction rule matched. Hash already computed over the unredacted body so signatures stay
+  // verifiable but the stored copy is safe to replay.
+  const redaction = redactBody(bodyBuf, hook.redactionRules);
+  const storedBody = redaction.body;
+  const reasonPrefix = redaction.applied
+    ? `dispatch intent: ${hook.targetSkill} · redacted: ${redaction.notes.join(",")}`
+    : `dispatch intent: ${hook.targetSkill}`;
+
+  const deliveryId = insertWebhookDelivery({
     slug,
     receivedAt,
     sourceIp,
     payloadHash,
     status: "accepted",
     httpCode: 202,
-    reason: `dispatch intent: ${hook.targetSkill}`,
-    body: bodyBuf,
+    reason: reasonPrefix,
+    body: storedBody,
+    redactionApplied: redaction.applied,
+  });
+
+  const dispatch = await dispatchAcceptedDelivery({
+    deliveryId,
+    slug,
+    targetSkill: hook.targetSkill,
+    payloadHash,
+    receivedAt,
+    bodyPath: null,
+    bodyBytes: storedBody?.length ?? 0,
   });
 
   return NextResponse.json(
@@ -140,6 +173,13 @@ export async function POST(
       slug,
       target_skill: hook.targetSkill,
       payload_hash: payloadHash,
+      delivery_id: deliveryId,
+      dispatch: {
+        status: dispatch.status,
+        run_id: dispatch.runId,
+        log: dispatch.log,
+      },
+      redacted: redaction.applied,
     },
     { status: 202 },
   );

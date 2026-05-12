@@ -1,97 +1,50 @@
-import { listRecentWebhookDeliveries } from "@/lib/runtime";
+import { listRecentWebhookDeliveries, type WebhookDelivery } from "@/lib/runtime";
 import { listWebhooks } from "@/lib/config";
 import { RegistryHeader } from "@/components/registry-header";
+import {
+  WebhookTailLive,
+  type StreamedDelivery,
+} from "@/components/webhook-tail-live";
 
 export const dynamic = "force-dynamic";
 
+const SEED_COUNT = 50;
+
+function toStreamed(d: WebhookDelivery): StreamedDelivery {
+  return {
+    id: d.id,
+    slug: d.slug,
+    received_at: d.received_at,
+    source_ip: d.source_ip,
+    payload_hash: d.payload_hash,
+    status: d.status,
+    http_code: d.http_code,
+    reason: d.reason,
+    dispatch_status: d.dispatch_status,
+    dispatch_target: d.dispatch_target,
+    dispatch_run_id: d.dispatch_run_id,
+    dispatched_at: d.dispatched_at,
+    dispatch_log: d.dispatch_log,
+    redaction_applied: d.redaction_applied,
+  };
+}
+
 export default async function WebhookTailPage() {
   const [deliveries, { inbound }] = await Promise.all([
-    Promise.resolve(listRecentWebhookDeliveries(100)),
+    Promise.resolve(listRecentWebhookDeliveries(SEED_COUNT)),
     listWebhooks(),
   ]);
+  const seed = deliveries.map(toStreamed);
 
   return (
     <div>
       <RegistryHeader
         title="Webhook tail"
         count={deliveries.length}
-        source="runtime.db: webhook_deliveries"
-        hint={`${inbound.length} inbound slug${inbound.length === 1 ? "" : "s"} configured · last 100 deliveries · 100/slug retention`}
+        source="runtime.db: webhook_deliveries · SSE /api/webhook-stream"
+        hint={`${inbound.length} inbound slug${inbound.length === 1 ? "" : "s"} configured · live ~1s · per-slug retention`}
       />
-
-      {deliveries.length === 0 ? (
-        <div className="border border-zinc-800 rounded-lg p-10 text-center bg-zinc-950">
-          <div className="text-sm text-zinc-400">No webhook deliveries yet.</div>
-          <div className="text-xs text-zinc-600 mt-2">
-            POST a signed payload to{" "}
-            <code className="text-zinc-500">/api/webhooks/&lt;slug&gt;</code> for any inbound slug
-            in <code className="text-zinc-500">webhook.json</code>.
-          </div>
-          {inbound.length > 0 && (
-            <div className="mt-4 text-xs text-zinc-500">
-              Configured slugs:{" "}
-              {inbound.map((w) => (
-                <code key={w.slug} className="mx-1 px-1.5 py-0.5 bg-zinc-900 rounded text-zinc-400">
-                  {w.slug}
-                </code>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="border border-zinc-800 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-zinc-900 text-zinc-400 text-xs uppercase tracking-wide">
-              <tr>
-                <th className="px-4 py-2.5 text-left">Received</th>
-                <th className="px-4 py-2.5 text-left">Slug</th>
-                <th className="px-4 py-2.5 text-left">Status</th>
-                <th className="px-4 py-2.5 text-right">HTTP</th>
-                <th className="px-4 py-2.5 text-left">Source IP</th>
-                <th className="px-4 py-2.5 text-left">Payload hash</th>
-                <th className="px-4 py-2.5 text-left">Reason</th>
-              </tr>
-            </thead>
-            <tbody>
-              {deliveries.map((d) => {
-                const color =
-                  d.status === "accepted"
-                    ? "border-emerald-700/50 bg-emerald-900/20 text-emerald-400"
-                    : d.status === "rejected"
-                      ? "border-amber-700/50 bg-amber-900/20 text-amber-400"
-                      : "border-rose-700/50 bg-rose-900/20 text-rose-400";
-                return (
-                  <tr key={d.id} className="border-t border-zinc-800 hover:bg-zinc-900/50">
-                    <td className="px-4 py-2.5 text-zinc-400 font-mono text-xs">
-                      {d.received_at.replace("T", " ").replace("Z", "")}
-                    </td>
-                    <td className="px-4 py-2.5 text-zinc-100 font-mono">{d.slug}</td>
-                    <td className="px-4 py-2.5">
-                      <span
-                        className={"inline-block px-2 py-0.5 text-xs rounded border font-mono " + color}
-                      >
-                        {d.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-zinc-300 font-mono tabular-nums text-xs">
-                      {d.http_code}
-                    </td>
-                    <td className="px-4 py-2.5 text-zinc-500 font-mono text-xs">
-                      {d.source_ip ?? "—"}
-                    </td>
-                    <td className="px-4 py-2.5 text-zinc-500 font-mono text-xs">
-                      {d.payload_hash.slice(0, 12)}…
-                    </td>
-                    <td className="px-4 py-2.5 text-zinc-400 text-xs max-w-md truncate" title={d.reason ?? ""}>
-                      {d.reason ?? <span className="text-zinc-600">—</span>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <WebhookTailLive seed={seed} seedCount={SEED_COUNT} />
     </div>
   );
 }

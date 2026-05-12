@@ -44,11 +44,24 @@ export type ApiConnector = {
   rateLimit?: { rpm?: number; rpd?: number };
 };
 
+export type RedactionRule = {
+  /** JSON-path-ish dotted key (matches at any depth via name fallback) to drop or replace */
+  key?: string;
+  /** Regex (string form) applied against the raw body bytes interpreted as utf8 */
+  pattern?: string;
+  /** Replacement (string). Defaults to `[REDACTED]`. */
+  replace?: string;
+};
+
 export type WebhookInbound = {
   slug: string;
   targetSkill: string;
   secretRef: string;
   verifySig: "hmac-sha256" | "none";
+  /** Maximum number of deliveries to keep in runtime.db (per slug). Default = 100. */
+  retentionLimit?: number;
+  /** Optional redaction rules applied before persisting body_blob. */
+  redactionRules?: RedactionRule[];
 };
 
 export type WebhookOutbound = {
