@@ -1,50 +1,57 @@
-# Yielde Bridge — handoff (post Phase 4)
+# Yielde Bridge — handoff (post Phase 5)
 
-Last session: 2026-05-12, ended after Phase 4 ship (Inspect room + real dispatch + per-slug redaction + retention + SSE tail + session-sync seam). Next session picks up Phase 5 (queue worker that consumes `~/.claude/bridge/dispatches/`, kernel-side `session.cost` event, co-founder rollout).
+Last session: 2026-05-12, ended after Phase 5 ship (queue worker + kernel `session.cost` producer + co-founder Tier-2 fallback + badge consolidation). Next session picks up Phase 6 (real cron executor for `webhook-dispatch-sweep`, skill provenance graph, eval harness, pricing JSON extraction, promote the seven brain drafts).
 
 Repo HEADs at handoff:
 
 | Repo | HEAD | Branch |
 |---|---|---|
-| `yielde-bridge` | `f17c5e4` | `main` |
-| `yielde-bridge-config` | `fb05d0d` (net-zero after smoke teardown vs `cef0d72`) | `main` |
-| `yielde-brain` | `1e3c646` (Phase 4 draft in `_inbox/`, awaiting `/brain-log promote`) | `master` |
+| `yielde-bridge` | `1dfca58` | `main` |
+| `yielde-bridge-config` | `fb05d0d` (content-identical descendants after smoke churn are acceptable) | `main` |
+| `yielde-skills` | `71d0556` | `main` |
+| `yielde-brain` | `05d66f0` (Phase 5 draft in `_inbox/`, awaiting `/brain-log promote`) | `master` |
 
 ---
 
 ## Handoff prompt (paste into a fresh Claude Code session)
 
-> Resume Yielde Bridge Phase 5.
+> Resume Yielde Bridge Phase 6.
 >
-> 1. Read `~/.claude/projects/C--Users-chris/memory/project_yielde_bridge.md` — Phase 0–4 ✅. Run all 11 "Verification on session resume" checks in that file before touching code. Each check carries a content assertion. Confirm `yielde-bridge` HEAD is `f17c5e4` (or descendant), `yielde-bridge-config` HEAD is `fb05d0d`, `yielde-brain` HEAD is `1e3c646` (or descendant).
-> 2. Read `C:\Users\chris\yielde-bridge\HANDOFF.md` (this file) for the Phase 5 plan, hard rules, open follow-ups, and smoke tests.
-> 3. Read `C:\Users\chris\yielde-bridge\AGENTS.md` — Next.js 16 / Turbopack / React 19 quirks plus the load-bearing **rule #3** (Bridge writes via `runtime.db`, never to `yielde-bridge-config/` from server routes).
+> 1. Read `~/.claude/projects/C--Users-chris/memory/project_yielde_bridge.md` — Phase 0–5 ✅. Run all 14 "Verification on session resume" checks in that file before touching code. Each check carries a content assertion. Confirm `yielde-bridge` HEAD is `1dfca58` (or descendant), `yielde-bridge-config` HEAD content-identical to `fb05d0d`, `yielde-skills` HEAD is `71d0556` (or descendant), `yielde-brain` HEAD is `05d66f0` (or descendant).
+> 2. Read `C:\Users\chris\yielde-bridge\HANDOFF.md` (this file) for the Phase 6 plan, hard rules, open follow-ups, and smoke tests.
+> 3. Read `C:\Users\chris\yielde-bridge\AGENTS.md` — Next.js 16 / Turbopack / React 19 quirks plus the load-bearing **rule #3** (Bridge writes via `runtime.db` + dispatch queue, never to `yielde-bridge-config/` from server routes).
 > 4. **Do NOT load `~/.claude/CLAUDE.md`'s full brain index unless a task explicitly touches `yielde-platform`, `yielde-site`, a client slug, or co-founder work.** Brain writes still go through `brain-gatekeeper`'s `_inbox/` rules — never edit canonical paths.
-> 5. **Hard rules to preserve** (full list in HANDOFF.md § Hard rules):
->    - Bridge reads-only from `yielde-bridge-config/`; all writes go through `scripts/bridge.mjs` or `runtime.db`.
->    - All `lib/` JSON readers MUST go through `lib/json-io.ts`. Raw `readFile + JSON.parse` is forbidden under `lib/`.
->    - Webhook secrets resolved per request via `lib/secret-resolver.ts`; never cached.
+> 5. **Hard rules to preserve** (full list in HANDOFF.md § Hard rules — all 15 enforcement-grade items):
+>    - Bridge reads-only from `yielde-bridge-config/`; all writes go through `scripts/bridge.mjs` (registry) or `lib/runtime.ts` + `lib/dispatcher.ts` (runtime).
+>    - All `lib/` JSON readers MUST go through `lib/json-io.ts`. Raw `readFile + JSON.parse` is forbidden under `lib/`. CLI scripts (under `scripts/`) inline their own `stripBom` because `lib/json-io.ts` is `server-only`.
+>    - Webhook secrets resolved per request via `lib/secret-resolver.ts`; never cached. Dispatcher and sweeper must not see the secret either.
 >    - File-guard pattern blocks `secrets` (plural). Use singular.
 >    - HTTP 200 ≠ feature working. Verification gates need content assertions.
->    - Next.js routes: avoid `_underscore` parent folders — they return 405. Date.now() in client component render is a `react-hooks/purity` error.
-> 6. Start Phase 5 work:
->    - Queue worker for `~/.claude/bridge/dispatches/<slug>/*.json`. Most likely a `/operator deploy webhook-dispatch-sweep` agent + a small Node CLI invoked by it. Worker updates `webhook_deliveries.dispatch_status` to `succeeded` or `failed`. Reuse `scripts/record-session-close.mjs` pattern.
->    - Kernel-side `session.cost` audit event. Append to `~/.claude/os/audit.jsonl` on session close with `tokens_in/tokens_out/cost_cents/model`. Kernel shells out to `node ~/.claude/bridge/cli/record-session-close.mjs` (or copy of `scripts/record-session-close.mjs`) so cost rollup populates. This is `~/.claude/os/` work, not in-repo.
->    - Co-founder rollout: Node-only CLI fallback in `operator-bridge` skill for Devon/Lyell, GitHub-issue handoff path.
->    - Badge consolidation: 8+ inline clones across Configure/Run/Inspect now exist. Pull the trigger on a generic `<Badge variant>` component.
+>    - Next.js routes: avoid `_underscore` parent folders — they return 405. `Date.now()` in client component render is a `react-hooks/purity` error.
+>    - Badges: use `components/badge.tsx` (`<Badge variant=… size=…>`); no new inline `inline-block px-2 py-0.5 rounded border font-mono` pills.
+> 6. Start Phase 6 work:
+>    - **`runtimes/cron.ps1` adapter for `/operator`.** Currently `~/.claude/operator/agents/webhook-dispatch-sweep.md` is registered with `runtime: cron` but the cron adapter doesn't exist on disk, so `/operator deploy webhook-dispatch-sweep` can't actually run the sweeper. Sweeper itself is fully functional via `node C:\Users\chris\yielde-bridge\scripts\sweep-dispatches.mjs --mode operator-deploy`. Phase 6 lands the adapter so the agent registry is the source of truth.
+>    - **Sweeper executor.** `operator-deploy` mode currently records `dispatch.intent` JSONL without actually invoking `/operator deploy <target>`. Wire real invocation (likely `claude -p "/operator deploy <target> --key=value"` with cost guardrails) so the queued deliveries actually run.
+>    - **Pricing JSON extraction.** `scripts/emit-session-cost.mjs` has a 6-row `PRICING_CENTS_PER_MILLION` table hand-maintained inline. Move to `~/.claude/bridge/cli/pricing.json` so the future model-router skill can share the source.
+>    - **Skill provenance graph + eval harness + curator** (innovation tier).
+>    - **Promote the 7 brain drafts** in `_inbox/` (Chris-only `/brain-log promote`).
 > 7. At meaningful milestones, write a draft to `yielde-brain/_inbox/YYYY-MM-DD-HHMM-<slug>.md` per the `brain-gatekeeper` schema, commit, and push. Never silent, never canonical.
 >
 > Work without stopping to ask clarifying questions when the reasonable call is obvious. Use TaskCreate to track multi-step work.
 
 ---
 
-## What shipped (Phase 4)
+## What shipped (Phase 5)
 
 | Repo | Commits | Highlights |
 |---|---|---|
-| `yielde-bridge` | `df8199b → c9f02ec → 1ad2913 → 41b5554` | Inspect room (4 panels + overview) · real dispatch (`dispatcher.ts`, queue files at `~/.claude/bridge/dispatches/`) · redaction (`redaction.ts`, JSON-key + regex) · 6-column runtime.db migration · per-slug retention + CLI flags (`--retention`, `--redact-key`, `--redact-pattern`) · SSE tail at `/api/webhook-stream` + `webhook-tail-live.tsx` client · session-sync from `audit.jsonl` + `scripts/record-session-close.mjs` seam · self-review cleanup (`1ad2913`) + HEAD-reference refresh (`41b5554`) |
-| `yielde-bridge-config` | `fb05d0d` → `…` → `fb05d0d` | smoke fixture round-trip — 4 commits, net-zero |
-| `yielde-brain` | `5ca2362 → 1e3c646` | `_inbox/2026-05-12-1530-yielde-bridge-phase-4-shipped.md` |
+| `yielde-bridge` | `28e5f87 → 1dfca58` | `scripts/sweep-dispatches.mjs` (queue worker, 3 modes: dry-run / operator-deploy / github-issue) · `scripts/emit-session-cost.mjs` (kernel seam: transcript JSONL → audit + DB upsert) · `components/badge.tsx` (6 variants × 2 sizes; 11 inline pill clones migrated, net -91 lines) |
+| `yielde-skills` | `5abadbe → 71d0556` | `scripts/operator-bridge-dispatch.mjs` (Tier-1 records dispatch.intent JSONL; Tier-2 opens labelled GitHub issue) · `skills/yielde/operator-bridge/SKILL.md` refactored to delegate to the new CLI |
+| `yielde-brain` | `1e3c646 → 05d66f0` | `_inbox/2026-05-12-1730-yielde-bridge-phase-5-shipped.md` |
+| Outside-repo | n/a | `~/.claude/hooks/yielde-os-session-stop.ps1` (fire-and-forget invocation of `emit-session-cost.mjs` after `session.stopped`) · `~/.claude/operator/agents/webhook-dispatch-sweep.md` (cron-runtime manifest, `*/5 * * * *`) · `~/.claude/bridge/cli/` (Windows directory junction → `yielde-bridge/scripts/`, stable kernel path) |
+
+**Earlier phases** (still referenced for verification gates):
+- Phase 4: Inspect room + real dispatch (`dispatcher.ts`) + redaction (`redaction.ts`) + 6-column `webhook_deliveries` migration + per-slug retention + SSE tail at `/api/webhook-stream` + `webhook-tail-live.tsx` + session-sync seam (`scripts/record-session-close.mjs`). Detail in the brain draft `_inbox/2026-05-12-1530-yielde-bridge-phase-4-shipped.md`.
 
 **Files in `yielde-bridge` that landed this phase:**
 
@@ -67,19 +74,19 @@ Repo HEADs at handoff:
 
 ---
 
-## Phase 5 plan (queue worker + kernel cost telemetry + co-founder rollout)
+## Phase 6 plan (real cron executor + pricing extraction + innovation tier)
 
-### Files to land (`yielde-bridge`)
+### Files to land
 
-1. **Queue worker.** Two surfaces likely:
-   - `scripts/sweep-dispatches.mjs` — Node script that scans `~/.claude/bridge/dispatches/<slug>/*.json`, attempts the dispatch (call the configured skill via whatever mechanism is right — `gh issue create` for Tier-2 fallback, `claude -p` for in-process, or signal an external runner), and updates `webhook_deliveries.dispatch_status` via the same `updateDispatch()` helper.
-   - `/operator deploy webhook-dispatch-sweep` agent that wraps the script and runs on cron via Yielde OS.
+1. **`runtimes/cron.ps1` adapter for `/operator`.** Phase 5 registered `~/.claude/operator/agents/webhook-dispatch-sweep.md` with `runtime: cron`, but the adapter doesn't exist on disk — so `/operator deploy webhook-dispatch-sweep` cannot actually invoke the sweeper. The sweeper itself works fine via direct `node scripts/sweep-dispatches.mjs --mode operator-deploy`. Phase 6 closes the loop: cron adapter triggers the script on schedule, captures stdout into the standard `~/.claude/operator/runs/webhook-dispatch-sweep/<run-id>.jsonl` location.
 
-2. **Kernel `session.cost` integration.** Outside this repo — needs a `~/.claude/os/` change. When a session ends, append an audit event `{ event: "session.cost", session_id, tokens_in, tokens_out, cost_cents, model }` and shell out to `scripts/record-session-close.mjs`. Bridge's `syncSessionsFromAudit` already has the `session.cost` branch wired.
+2. **Sweeper executor.** `operator-deploy` mode currently records `dispatch.intent` + `dispatch.queued` JSONL without actually invoking `/operator deploy <target>`. Wire real invocation (likely `claude -p` with cost guardrails) so a queued delivery actually runs the configured agent. Until then, Phase 5's mode is a faithful audit trail but not an execution.
 
-3. **Co-founder rollout.** Update `operator-bridge` skill: when `~/.claude/operator/` does not exist on the running machine (Devon/Lyell), fall back to opening a GitHub issue against `yielde-brain` with the operator request payload. Skill already documents this; needs the code path.
+3. **Pricing JSON extraction.** `scripts/emit-session-cost.mjs` has a 6-row `PRICING_CENTS_PER_MILLION` table hand-maintained inline. Move to `~/.claude/bridge/cli/pricing.json` (single source of truth shared with the future model-router skill).
 
-4. **Badge consolidation.** Replace the inline `Badge` clones in `webhook-tail-live.tsx`, run-nav, configure pages, etc. with a single `<Badge variant>` component.
+4. **Innovation tier.** Skill provenance graph (cross-reference `related_skills` frontmatter into a clickable Inspect view), eval harness for skills (Hermes-imported and yielde-native), curator with Chris-approve flow for promoting Hermes drafts.
+
+5. **Brain draft promote queue.** Seven drafts now awaiting `/brain-log promote` (Chris-only). Phase 6 should not ship new drafts until the queue drains.
 
 ### Hard rules (don't break)
 
@@ -95,13 +102,13 @@ Inherited from Phase 3 + extended for Phase 4:
 - **Next.js routing**: never use `_`-prefixed folders for routes — Next treats them as private and returns 405. The SSE route lives at `/api/webhook-stream/` for this reason.
 - **React 19 purity**: server components and client renders must not call `Date.now()` (or other impure functions) at render time. Hoist to `useState`+`useEffect` with `setInterval`. Setting state synchronously inside the effect body trips `react-hooks/set-state-in-effect` — let the first tick land via the interval.
 
-### Verification gate before Phase 5 commit
+### Verification gate before Phase 6 commit
 
 - `npx tsc --noEmit` clean.
 - `npx eslint --max-warnings=0 lib/ components/ app/` clean.
-- Queue file consumed by the sweeper → `dispatch_status` flips from `queued` to `succeeded` (or `failed` with a real error in `dispatch_log`).
-- Real `session.cost` audit event lands → `sessions` table row has `cost_cents` populated → cost rollup non-zero.
-- Co-founder fallback: simulate "no operator dir" → `operator-bridge` opens a GitHub issue with the request payload. (Smoke locally with `YIELDE_OPERATOR_DIR=/nonexistent`.)
+- `/operator deploy webhook-dispatch-sweep` actually invokes the sweeper script via the new cron adapter (not just records intent).
+- A queued delivery flips `queued → succeeded` AND the configured `dispatch_target` is observably invoked end-to-end (e.g. `deploy-yielde-site` agent run produces a real `~/.claude/operator/runs/deploy-yielde-site/<run-id>.jsonl` with `operator.run.end`).
+- Pricing table moved to `~/.claude/bridge/cli/pricing.json`; `emit-session-cost.mjs` reads from it.
 - Brain draft in `_inbox/` describing what shipped, committed and pushed.
 
 ---
@@ -191,10 +198,10 @@ node scripts/record-session-close.mjs --id <session_id> --ended-at <ISO> --model
 
 ---
 
-## Phase 5+ on the radar
+## Phase 6+ on the radar
 
-- **Phase 5 — Queue worker + kernel cost + co-founder rollout.** Sweep `~/.claude/bridge/dispatches/`; update `dispatch_status`. Kernel emits `session.cost` events; cost rollup activates. `operator-bridge` Tier-2 (Devon/Lyell) GitHub-issue fallback wired.
-- **Phase 6 — Innovation tier.** Skill provenance graph, eval harness, curator with Chris-approve, bulk Hermes import. Badge consolidation as part of this pass.
+- **Phase 6 — Real cron executor + pricing extraction + innovation tier.** `runtimes/cron.ps1` so `/operator deploy webhook-dispatch-sweep` runs the sweeper on schedule. Sweeper actually invokes `/operator deploy <target>` instead of just recording intent. Pricing table extracted to `~/.claude/bridge/cli/pricing.json`. Skill provenance graph, eval harness, curator with Chris-approve.
+- **Phase 7+ — Open.** Bulk Hermes import. Multi-machine sync (Devon/Lyell operator state replication). External webhook outbound (we have inbound + dispatch; outbound is half-stubbed in `webhook-out` registry).
 
 ---
 
@@ -217,5 +224,9 @@ Anything below this line is enforcement-grade — the resume prompt and Phase 5 
 13. **Redaction before persistence.** No raw PII in `webhook_deliveries.body_blob`. Every PII-bearing slug must declare redaction rules at `bridge add webhook` time before the integration goes live.
 14. **Schema migrations are idempotent.** Use `PRAGMA table_info(<table>)` to check before `ALTER TABLE ADD COLUMN`. Existing rows survive — they get NULL for new columns until rewritten.
 15. **Next.js route file names.** Folders prefixed `_` are private (returns 405). The SSE endpoint at `/api/webhook-stream/` deliberately avoids `/api/webhooks/_stream/`. Keep routes flat or use non-underscore names.
+
+16. **Badges go through `components/badge.tsx`.** Six variants (`success | warn | danger | info | accent | muted`), two sizes (`md | sm`). No new inline `inline-block px-2 py-0.5 rounded border font-mono` pills. Domain-specific wrappers (TransportBadge, KindBadge, etc.) thinly map a value space to a variant and delegate. The connection-state pill in `webhook-tail-live.tsx` is the only deliberate exception (it carries a pulsing colored dot).
+
+17. **CLI scripts in `scripts/` cannot import `lib/*`.** Server-only modules are excluded from Node CLI contexts. CLIs inline their own `stripBom` and SQL helpers; this is the precedent set by `record-session-close.mjs`, `emit-session-cost.mjs`, and `sweep-dispatches.mjs`. When a 5th CLI lands, consolidate to a non-server-only `lib/io-utils.mjs`.
 
 If any future change weakens one of these, propose an explicit ADR-style entry in a brain draft before shipping.
