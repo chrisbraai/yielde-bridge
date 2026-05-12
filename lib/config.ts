@@ -77,9 +77,7 @@ export type Capability = {
   lastReviewed?: string | null;
 };
 
-// ---------- Generic JSON read with friendly fallback ----------
-
-const readJson = readJsonOrDefault;
+// ---------- File shapes (match yielde-bridge-config schema_version 1.0) ----------
 
 type McpFile = {
   schema_version?: string;
@@ -122,7 +120,7 @@ type CapabilitiesFile = {
 // ---------- Listers ----------
 
 export async function listMcpServers(): Promise<McpServer[]> {
-  const file = await readJson<McpFile>(join(configRoot(), "mcp.json"), { servers: {} });
+  const file = await readJsonOrDefault<McpFile>(join(configRoot(), "mcp.json"), { servers: {} });
   const servers = file.servers ?? {};
   return Object.entries(servers)
     .map(([name, v]) => ({ name, ...v }))
@@ -130,7 +128,7 @@ export async function listMcpServers(): Promise<McpServer[]> {
 }
 
 export async function listApiConnectors(): Promise<ApiConnector[]> {
-  const file = await readJson<ApiFile>(join(configRoot(), "api.json"), { connectors: {} });
+  const file = await readJsonOrDefault<ApiFile>(join(configRoot(), "api.json"), { connectors: {} });
   const connectors = file.connectors ?? {};
   return Object.entries(connectors)
     .map(([name, v]) => ({ name, ...v }))
@@ -141,7 +139,7 @@ export async function listWebhooks(): Promise<{
   inbound: WebhookInbound[];
   outbound: WebhookOutbound[];
 }> {
-  const file = await readJson<WebhookFile>(join(configRoot(), "webhook.json"), {
+  const file = await readJsonOrDefault<WebhookFile>(join(configRoot(), "webhook.json"), {
     inbound: {},
     outbound: {},
   });
@@ -155,7 +153,7 @@ export async function listWebhooks(): Promise<{
 }
 
 export async function listSecretRefs(): Promise<SecretRef[]> {
-  const file = await readJson<SecretRefsFile>(join(configRoot(), "secret-refs.json"), {
+  const file = await readJsonOrDefault<SecretRefsFile>(join(configRoot(), "secret-refs.json"), {
     refs: {},
   });
   const refs = file.refs ?? {};
@@ -165,7 +163,7 @@ export async function listSecretRefs(): Promise<SecretRef[]> {
 }
 
 export async function listCapabilities(): Promise<Capability[]> {
-  const file = await readJson<CapabilitiesFile>(capabilitiesRegistryPath(), {
+  const file = await readJsonOrDefault<CapabilitiesFile>(capabilitiesRegistryPath(), {
     capabilities: {},
   });
   const caps = file.capabilities ?? {};

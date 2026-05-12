@@ -16,7 +16,7 @@ Repo HEADs at handoff:
 
 > Resume Yielde Bridge Phase 4.
 >
-> 1. Read `~/.claude/projects/C--Users-chris/memory/project_yielde_bridge.md` — Phase 0–3 ✅. Run all 9 "Verification on session resume" checks in that file before touching code. Confirm `yielde-bridge` HEAD is `7e2a725` (or descendant) and `yielde-bridge-config` HEAD is `fb05d0d`.
+> 1. Read `~/.claude/projects/C--Users-chris/memory/project_yielde_bridge.md` — Phase 0–3 ✅. Run all 10 "Verification on session resume" checks in that file before touching code. Each check now includes a content assertion, not just a status code. Confirm `yielde-bridge` HEAD is `988460b` (or descendant), `yielde-bridge-config` HEAD is `fb05d0d`, `yielde-brain` HEAD is `5ca2362`.
 > 2. Read `C:\Users\chris\yielde-bridge\HANDOFF.md` (this file) for the Phase 4 plan, hard rules, open follow-ups, and smoke tests.
 > 3. Read `C:\Users\chris\yielde-bridge\AGENTS.md` — Next.js 16 / Turbopack / React 19 quirks plus the load-bearing **rule #3** (Bridge writes via `runtime.db`, never to `yielde-bridge-config/` from server routes).
 > 4. **Do NOT load `~/.claude/CLAUDE.md`'s full brain index unless a task explicitly touches `yielde-platform`, `yielde-site`, a client slug, or co-founder work.** This session is repo-local to `yielde-bridge` and `yielde-bridge-config`. Brain writes still go through `brain-gatekeeper`'s `_inbox/` rules — never edit canonical paths (`Decisions/`, `Incidents/`, `Staff/`, `Clients/`, `SOPs/`, `Platform/`, `Site/`, `Glossary.md`, `Backlog.md`, `INDEX.md`, `Alignment.excalidraw.md`).
