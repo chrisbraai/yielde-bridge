@@ -14,13 +14,15 @@ Three rooms, modelled on Bridgemind's BridgeSpace pattern:
 | **Run** | See active sessions, `/operator` recent runs, webhook deliveries, cost meter, scheduled fires. |
 | **Inspect** | Search audit log, review `yielde-brain/_inbox/` drafts with diff + promote, see capability decisions, skill traces, eval scores. |
 
-## What's live (Phase 0)
+## What's live (Phase 1)
 
 - Three-room navigation chrome.
-- **Configure / Skills** panel — reads `~/.claude/skills/` from filesystem, lists every installed skill with provenance badge, opens a per-skill viewer rendering the SKILL.md body with full frontmatter sidebar.
-- All other panels are phase-stamped placeholders describing what they will ship.
+- **Configure / Skills** panel — reads `~/.claude/skills/` from filesystem, lists every installed skill with provenance badge, 14-day usage sparkline, and a per-skill viewer rendering the SKILL.md body with full frontmatter sidebar.
+- **Import-from-Hermes** modal (`+ Import from Hermes URL`) — accepts a slug, `owner/repo:path`, or full GitHub URL; calls `POST /api/skills/import-hermes` which shells out to `yielde-skills/scripts/import-hermes.mjs` and refreshes the table on success.
+- **Usage telemetry** — `POST /api/skills/use { name }` increments a 14-day rolling history in `~/.claude/skills/.usage.json` (atomic write via temp + rename). Sparklines read the same file.
+- All other Configure panels (MCP, API, Webhooks, Secrets, Capabilities) and the Run / Inspect rooms remain phase-stamped placeholders.
 
-See `app/` for the route layout and `lib/skills.ts` for the skill reader.
+See `app/` for the route layout, `lib/skills.ts` for the skill reader, and `lib/usage.ts` for the telemetry sidecar.
 
 ## Running locally
 
@@ -37,7 +39,9 @@ npm run dev
 ├── os/                    Yielde OS substrate (kernel, sessions, audit, capabilities)
 ├── operator/              /operator agent registry + runs
 └── skills/
-    └── yielde/  → JUNCTION → C:\Users\chris\yielde-skills\skills\yielde\
+    ├── yielde/  → JUNCTION → C:\Users\chris\yielde-skills\skills\yielde\
+    ├── hermes/  → JUNCTION → C:\Users\chris\yielde-skills\skills\hermes\
+    └── .usage.json        14-day rolling telemetry (written by Bridge)
 
 C:\Users\chris\
 ├── yielde-skills\         Hermes-compatible SKILL.md library (public, MIT)
@@ -51,7 +55,9 @@ Next.js 16 (App Router, Turbopack) · TypeScript · Tailwind v4 · React 19. No 
 
 ## Status
 
-Phase 0 — foundation skills + UI shell. See the Yielde Bridge decision in yielde-brain (pending promotion from `_inbox/`).
+Phase 1 — Hermes skill import + telemetry + sparklines shipped 2026-05-12. Phase 2 (registries + Configure panels for MCP / API / Webhooks / Secrets / Capabilities) is next.
+
+For a fresh-session handoff, read [HANDOFF.md](./HANDOFF.md) — contains a literal resume prompt, the Phase 2 plan, open follow-ups, and a smoke-test gate.
 
 ## License
 
