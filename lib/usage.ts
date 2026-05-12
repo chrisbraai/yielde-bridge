@@ -2,6 +2,7 @@ import "server-only";
 import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { skillsRoot } from "./skills";
+import { stripBom } from "./json-io";
 
 const USAGE_VERSION = 1;
 const HISTORY_DAYS = 14;
@@ -31,7 +32,7 @@ function emptyUsage(): SkillUsage {
 
 export async function readUsage(): Promise<UsageFile> {
   try {
-    const raw = await readFile(usagePath(), "utf8");
+    const raw = stripBom(await readFile(usagePath(), "utf8"));
     const parsed = JSON.parse(raw);
     if (typeof parsed !== "object" || !parsed) throw new Error("malformed");
     if (parsed.version !== USAGE_VERSION) {

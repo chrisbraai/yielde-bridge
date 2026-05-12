@@ -1,7 +1,7 @@
 import "server-only";
-import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { readJsonOrDefault } from "./json-io";
 
 export type SessionRow = {
   id: string;
@@ -44,20 +44,7 @@ export function sessionsPath(): string {
 }
 
 export async function listSessions(): Promise<SessionRow[]> {
-  let raw: string;
-  try {
-    raw = await readFile(sessionsPath(), "utf8");
-  } catch {
-    return [];
-  }
-  // Yielde OS writes sessions.json from PowerShell, which emits a UTF-8 BOM that JSON.parse rejects.
-  if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
-  let data: OsSessionsFile;
-  try {
-    data = JSON.parse(raw) as OsSessionsFile;
-  } catch {
-    return [];
-  }
+  const data = await readJsonOrDefault<OsSessionsFile>(sessionsPath(), {});
   const entries = Object.entries(data.sessions ?? {});
   return entries
     .map(([id, v]) => ({

@@ -1,7 +1,7 @@
 import "server-only";
-import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { readJsonOrDefault } from "./json-io";
 
 /**
  * Config root resolution:
@@ -79,18 +79,7 @@ export type Capability = {
 
 // ---------- Generic JSON read with friendly fallback ----------
 
-async function readJson<T>(path: string, fallback: T): Promise<T> {
-  try {
-    const st = await stat(path);
-    if (!st.isFile()) return fallback;
-    let src = await readFile(path, "utf8");
-    // Strip UTF-8 BOM — Yielde OS files written from PowerShell carry one and JSON.parse rejects.
-    if (src.charCodeAt(0) === 0xfeff) src = src.slice(1);
-    return JSON.parse(src) as T;
-  } catch {
-    return fallback;
-  }
-}
+const readJson = readJsonOrDefault;
 
 type McpFile = {
   schema_version?: string;
