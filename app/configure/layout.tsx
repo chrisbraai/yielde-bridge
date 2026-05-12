@@ -1,6 +1,8 @@
 import { ConfigureNav } from "@/components/configure-nav";
 
-export default function ConfigureLayout({
+export const dynamic = "force-dynamic";
+
+export default async function ConfigureLayout({
   children,
 }: {
   children: React.ReactNode;

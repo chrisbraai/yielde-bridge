@@ -14,15 +14,18 @@ Three rooms, modelled on Bridgemind's BridgeSpace pattern:
 | **Run** | See active sessions, `/operator` recent runs, webhook deliveries, cost meter, scheduled fires. |
 | **Inspect** | Search audit log, review `yielde-brain/_inbox/` drafts with diff + promote, see capability decisions, skill traces, eval scores. |
 
-## What's live (Phase 1)
+## What's live (Phase 2)
 
-- Three-room navigation chrome.
-- **Configure / Skills** panel — reads `~/.claude/skills/` from filesystem, lists every installed skill with provenance badge, 14-day usage sparkline, and a per-skill viewer rendering the SKILL.md body with full frontmatter sidebar.
+- Three-room navigation chrome with live count badges on each Configure panel.
+- **Configure / Skills** — reads `~/.claude/skills/` from filesystem, lists every installed skill with provenance badge, 14-day usage sparkline, and a per-skill viewer rendering the SKILL.md body with full frontmatter sidebar.
+- **Configure / MCP, API, Webhooks, Secret refs** — read `yielde-bridge-config/{mcp,api,webhook,secret-refs}.json` and render typed tables. Empty registries surface the `bridge` CLI hint inline.
+- **Configure / Capabilities** — read-only mirror of `~/.claude/os/capabilities/registry.json`, grouped by category A–F with `allowed` / `refused` / `hard-gate` badges per row.
 - **Import-from-Hermes** modal (`+ Import from Hermes URL`) — accepts a slug, `owner/repo:path`, or full GitHub URL; calls `POST /api/skills/import-hermes` which shells out to `yielde-skills/scripts/import-hermes.mjs` and refreshes the table on success.
 - **Usage telemetry** — `POST /api/skills/use { name }` increments a 14-day rolling history in `~/.claude/skills/.usage.json` (atomic write via temp + rename). Sparklines read the same file.
-- All other Configure panels (MCP, API, Webhooks, Secrets, Capabilities) and the Run / Inspect rooms remain phase-stamped placeholders.
+- **`bridge` CLI** — `node scripts/bridge.mjs sync|list|add|remove …` mutates `yielde-bridge-config/` via git, with a regex-based secret-leak guard. See [HANDOFF.md](./HANDOFF.md) for the full subcommand cheatsheet.
+- Run / Inspect rooms remain phase-stamped placeholders.
 
-See `app/` for the route layout, `lib/skills.ts` for the skill reader, and `lib/usage.ts` for the telemetry sidecar.
+See `app/` for the route layout, `lib/skills.ts` + `lib/config.ts` for the registry readers, `lib/usage.ts` for the telemetry sidecar, and `scripts/bridge.mjs` for the config CLI.
 
 ## Running locally
 
@@ -55,9 +58,9 @@ Next.js 16 (App Router, Turbopack) · TypeScript · Tailwind v4 · React 19. No 
 
 ## Status
 
-Phase 1 — Hermes skill import + telemetry + sparklines shipped 2026-05-12. Phase 2 (registries + Configure panels for MCP / API / Webhooks / Secrets / Capabilities) is next.
+Phase 2 — registries + Configure panels + `bridge` CLI shipped 2026-05-12 (`c6bf4d6`). Phase 3 (Run room: live sessions, operator runs, webhook tail, cost meter, SQLite-backed webhook archive) is next.
 
-For a fresh-session handoff, read [HANDOFF.md](./HANDOFF.md) — contains a literal resume prompt, the Phase 2 plan, open follow-ups, and a smoke-test gate.
+For a fresh-session handoff, read [HANDOFF.md](./HANDOFF.md) — contains a literal resume prompt, the Phase 3 plan, open follow-ups, and a smoke-test gate.
 
 ## License
 
