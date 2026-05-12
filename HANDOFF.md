@@ -17,10 +17,10 @@ Repo HEADs at handoff:
 
 > Resume Yielde Bridge Phase 7.
 >
-> 1. Read `~/.claude/projects/C--Users-chris/memory/project_yielde_bridge.md` — Phase 0–6 ✅. Run all 18 "Verification on session resume" checks in that file before touching code. Each check carries a content assertion. Confirm `yielde-bridge` HEAD is `c157f0e` (or descendant), `yielde-bridge-config` HEAD content-identical to `fb05d0d`, `yielde-skills` HEAD is `024f084` (or descendant), `yielde-brain` HEAD is `7432ecf` (or descendant).
+> 1. Read `~/.claude/projects/C--Users-chris/memory/project_yielde_bridge.md` — Phase 0–6 ✅. Run all 14 base "Verification on session resume" checks in that file plus the 4 Phase 6 additions in HANDOFF.md § Phase 6 verification additions (cron.ps1 one-shot, smoke-phase6.mjs end-to-end, `pricing_source` field stamping, `session-cost.log` accumulation). Each check carries a content assertion. Confirm `yielde-bridge` HEAD is `c157f0e` (or descendant), `yielde-bridge-config` HEAD content-identical to `fb05d0d`, `yielde-skills` HEAD is `024f084` (or descendant), `yielde-brain` HEAD is `7432ecf` (or descendant).
 > 2. Read `C:\Users\chris\yielde-bridge\HANDOFF.md` (this file) for the Phase 7 plan, hard rules, open follow-ups, and smoke tests.
 > 3. Read `C:\Users\chris\yielde-bridge\AGENTS.md` — Next.js 16 / Turbopack / React 19 quirks plus the load-bearing **rule #3** (Bridge writes via `runtime.db` + dispatch queue, never to `yielde-bridge-config/` from server routes).
-> 4. **Do NOT load `~/.claude/CLAUDE.md`'s full brain index unless a task explicitly touches `yielde-platform`, `yielde-site`, a client slug, or co-founder work.** Brain writes still go through `brain-gatekeeper`'s `_inbox/` rules — never edit canonical paths (`Decisions/`, `Incidents/`, `Staff/`, `Clients/`, `SOPs/`, `Platform/`, `Site/`, `Glossary.md`, `Backlog.md`, `INDEX.md`, `Alignment.excalidraw.md`).
+> 4. **Do NOT load `~/.claude/CLAUDE.md`'s full brain index unless a task explicitly touches `yielde-platform`, `yielde-site`, a client slug, or co-founder work.** Brain writes still go through `brain-gatekeeper`'s `_inbox/` rules — never edit canonical paths (`Decisions/`, `Incidents/`, `Staff/`, `Clients/`, `SOPs/`, `Platform/`, `Site/`, `Glossary.md`, `Backlog.md`, `INDEX.md`, `Alignment.excalidraw.md`). Nine drafts in `_inbox/` are awaiting `/brain-log promote` (Chris-only) — do not add a tenth before the queue drains unless Phase 7 itself ships something brain-worthy at the end.
 > 5. **Hard rules to preserve** (full 20-item list in HANDOFF.md § Appendix — all enforcement-grade). The load-bearing ones:
 >    - Bridge reads-only from `yielde-bridge-config/`; registry mutations via `scripts/bridge.mjs`; runtime state via `lib/runtime.ts` + `lib/dispatcher.ts` + the dispatch queue.
 >    - All `lib/` JSON readers MUST go through `lib/json-io.ts`. Raw `readFile + JSON.parse` is forbidden under `lib/` for JSON files. CLI scripts under `scripts/` cannot import `lib/*` (server-only) — they inline their own `stripBom` per rule #17.
@@ -80,7 +80,7 @@ Repo HEADs at handoff:
 
 **Files in `yielde-bridge` that landed this phase:**
 
-- **`runtimes/cron.ps1`** (lives at `~/.claude/operator/runtimes/cron.ps1`, source-of-truth in this repo… actually no — it's an outside-repo file alongside `agents/` and `lib/`. The canonical copy lives at `~/.claude/operator/runtimes/cron.ps1`; treat it as part of Bridge because Bridge owns the cron contract). Four actions: `run` (one-shot — reads `command:` from manifest, executes via `System.Diagnostics.Process` for reliable exit codes, captures stdout/stderr with libuv noise stripped, writes JSONL events), `register` (`schtasks /Create`, supports `*/N * * * *`/`0 */N * * *`/`0 H * * *`), `unregister`, `status`. Inlines its own run-log + audit writes (no `operator.ps1` dependency) so `$env:YIELDE_OPERATOR_DIR` overrides work cleanly for smokes/evals.
+- **`~/.claude/operator/runtimes/cron.ps1`** (outside-repo file alongside `agents/` and `lib/`, but the cron contract is Bridge-owned so it ships under this phase). Four actions: `run` (one-shot — reads `command:` from manifest, executes via `System.Diagnostics.Process` for reliable exit codes, captures stdout/stderr with libuv noise stripped, writes JSONL events), `register` (`schtasks /Create`, supports `*/N * * * *`/`0 */N * * *`/`0 H * * *`), `unregister`, `status`. Inlines its own run-log + audit writes (no `operator.ps1` dependency) so `$env:YIELDE_OPERATOR_DIR` overrides work cleanly for smokes/evals.
 
 - **`scripts/sweep-dispatches.mjs`** — `operator-deploy` mode now actually invokes the target. New helpers `readManifestRuntime` (inline frontmatter parser; consolidation pending Phase 7 rule), `invokeRuntimeAdapter` (spawns `runtimes/<runtime>.ps1`), `invokeClaudeP` (LLM path, env-gated). Routes by runtime: `cron`/`mcp-tool` → adapter (no LLM cost), `claude-subagent`/`n8n-workflow` → `claude -p` IFF `YIELDE_BRIDGE_DISPATCH_INVOKE=1` AND `YIELDE_BRIDGE_DISPATCH_MAX_COST_CENTS=N` are set, else records `dispatch.deferred`. Honours `structured.ok === false` from fail-soft adapters (rule #18). Run JSONL gains `dispatch.intent` → `dispatch.invoked` → `operator.run.end` per delivery.
 
@@ -97,6 +97,18 @@ Repo HEADs at handoff:
 - **`scripts/smoke-phase6.mjs`** — end-to-end Phase 6 verification. Tmp-isolated: creates a temp `OPERATOR_ROOT` with a fresh `runtime: cron` test agent (`cmd /c echo PHASE6_MARKER_OK`), seeds a `webhook_deliveries` row in `queued`, drops a queue file, invokes `sweep-dispatches.mjs --mode operator-deploy` with env overrides. Asserts: DB flips to `succeeded`, run JSONL has all 6 events in order, marker appears in `run.end.stdout_tail`, `dispatch.invoked.ok === true`. Cleans up the temp dir. Exit 0 on pass.
 
 - **`yielde-skills/evals/`** + **`yielde-skills/scripts/run-evals.mjs`** — eval scaffold. Layout: `evals/<skill>/<case-id>/{input.md, expected.md, meta.json[, fixtures/]}`. CLI walks the tree → JSON report (discovery mode). `--run` shells `claude -p` per case and captures stdout; automated grading is Phase 7. Seed case: `evals/brain-read/list-recent/`.
+
+---
+
+## Phase 6 verification additions (run after the 14 base checks in project memory)
+
+15. **`cron.ps1 -Action run` one-shot.** `& "C:\Users\chris\.claude\operator\runtimes\cron.ps1" -Action run -Name webhook-dispatch-sweep -InputsJson '{"mode":"dry-run","limit":1}'` prints `{"ok":true,"data":{"run_id":"…","status":"success","exit_code":0,"summary":"processed=0 succeeded=0 failed=0"}}` and creates a fresh `~/.claude/operator/runs/webhook-dispatch-sweep/<run-id>.jsonl` with `run.start → cron.invoking → run.end` events.
+
+16. **Phase 6 end-to-end smoke.** `node C:\Users\chris\yielde-bridge\scripts\smoke-phase6.mjs` exits 0 with `=== Phase 6 smoke PASS ===` on the final line. Asserts: queued delivery flips to `succeeded`, run JSONL has all 6 events (`dispatch.intent → run.start → cron.invoking → run.end → dispatch.invoked → operator.run.end`), `PHASE6_MARKER_OK` appears in `run.end.stdout_tail`, `dispatch.invoked.ok === true`, temp dir cleaned up.
+
+17. **Pricing JSON wired.** `node C:\Users\chris\yielde-bridge\scripts\emit-session-cost.mjs --session-id smoke-pricing-$(Get-Random) --transcript-path <any real transcript jsonl> --role worker` prints a single line whose `pricing_source` field ends with `pricing.json` (i.e. NOT `fallback-embedded`).
+
+18. **session-cost log sink.** `Test-Path C:\Users\chris\.claude\bridge\logs\session-cost.log` returns `True`. `Get-Content $logPath -Tail 1` is a valid JSON line with at minimum `ts`, `session_id`, `status` fields.
 
 ---
 
