@@ -21,6 +21,21 @@ const recentRuns = db
 console.log("recent operator runs:", recentRuns);
 
 const recentWh = db
-  .prepare("SELECT slug, status, http_code, reason FROM webhook_deliveries ORDER BY id DESC LIMIT 5")
+  .prepare(
+    `SELECT slug, status, http_code, dispatch_status, dispatch_target, redaction_applied, reason
+     FROM webhook_deliveries
+     ORDER BY id DESC
+     LIMIT 5`,
+  )
   .all();
 console.log("recent webhook deliveries:", recentWh);
+
+const recentSess = db
+  .prepare(
+    `SELECT id, role, started_at, ended_at, cost_cents
+     FROM sessions
+     ORDER BY started_at DESC NULLS LAST
+     LIMIT 5`,
+  )
+  .all();
+console.log("recent sessions:", recentSess);

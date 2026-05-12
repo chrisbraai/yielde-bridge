@@ -201,29 +201,6 @@ function pruneSlugRetention(slug: string): void {
     .run(slug, keepCountForSlug(slug));
 }
 
-/**
- * Apply per-slug retention sweep across all configured slugs. Returns the number of rows pruned.
- * Safe to call repeatedly; new rows from incoming webhooks already prune on insert.
- */
-export function pruneAllRetention(limits: Map<string, number>): number {
-  setRetentionLimits(limits);
-  const slugs = db()
-    .prepare(`SELECT DISTINCT slug FROM webhook_deliveries`)
-    .all() as { slug: string }[];
-  let pruned = 0;
-  for (const { slug } of slugs) {
-    const before = (db()
-      .prepare(`SELECT COUNT(*) AS n FROM webhook_deliveries WHERE slug = ?`)
-      .get(slug) as { n: number }).n;
-    pruneSlugRetention(slug);
-    const after = (db()
-      .prepare(`SELECT COUNT(*) AS n FROM webhook_deliveries WHERE slug = ?`)
-      .get(slug) as { n: number }).n;
-    pruned += before - after;
-  }
-  return pruned;
-}
-
 const WEBHOOK_SELECT = `
   id, slug, received_at, source_ip, payload_hash, status, http_code, reason,
   dispatch_status, dispatch_target, dispatch_run_id, dispatched_at, dispatch_log,
@@ -384,18 +361,6 @@ export function upsertSession(r: UpsertSessionRow): void {
          intent     = COALESCE(excluded.intent,     sessions.intent)`,
     )
     .run(r);
-}
-
-export function listRecentSessionsFromDb(limit = 100): SessionRowDb[] {
-  return db()
-    .prepare(
-      `SELECT id, harness, role, started_at, ended_at, model,
-              tokens_in, tokens_out, cost_cents, intent
-       FROM sessions
-       ORDER BY started_at DESC NULLS LAST
-       LIMIT ?`,
-    )
-    .all(limit) as SessionRowDb[];
 }
 
 export function runtimeStats(): { webhooks: number; operatorRuns: number; sessions: number } {
