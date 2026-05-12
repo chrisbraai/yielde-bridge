@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listBrainInboxDrafts, type BrainDraft } from "@/lib/brain-inbox";
 import { RegistryHeader } from "@/components/registry-header";
+import { fmtTimestamp } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +15,6 @@ const KIND_STYLE: Record<string, string> = {
   "client-update": "border-purple-700/50 bg-purple-900/20 text-purple-300",
   unknown: "border-zinc-700 bg-zinc-900 text-zinc-400",
 };
-
-function fmtTs(ts: string): string {
-  return ts.replace("T", " ").replace(/\..+$/, "").replace("Z", "");
-}
 
 export default async function BrainInboxPage({
   searchParams,
@@ -112,7 +109,7 @@ function DraftView({ draft }: { draft: BrainDraft }) {
         <MetaRow label="author" value={draft.author} />
         <MetaRow label="status" value={draft.status} />
         <MetaRow label="promote_target" value={draft.promoteTarget} />
-        <MetaRow label="modified" value={fmtTs(draft.modifiedAt)} />
+        <MetaRow label="modified" value={fmtTimestamp(draft.modifiedAt, { stripMillis: true })} />
         <MetaRow label="session" value={draft.session ? draft.session.slice(0, 12) : null} />
         {draft.tags.length > 0 && (
           <div className="col-span-2 flex gap-1.5 flex-wrap mt-1.5">

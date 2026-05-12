@@ -2,6 +2,7 @@ import Link from "next/link";
 import { listAuditEvents } from "@/lib/audit";
 import { listCapabilities, type Capability } from "@/lib/config";
 import { RegistryHeader } from "@/components/registry-header";
+import { fmtTimestamp } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +15,6 @@ function parseLimit(raw: string | undefined): number {
   const n = raw ? parseInt(raw, 10) : NaN;
   if (Number.isNaN(n)) return 200;
   return Math.min(Math.max(n, 1), 2000);
-}
-
-function fmtTs(ts: string): string {
-  return ts.replace("T", " ").replace("Z", "");
 }
 
 export default async function CapabilityDecisionsPage({
@@ -105,7 +102,7 @@ export default async function CapabilityDecisionsPage({
                       className="border-t border-zinc-800 hover:bg-zinc-900/50 align-top"
                     >
                       <td className="px-4 py-2 text-zinc-400 font-mono text-xs whitespace-nowrap">
-                        {fmtTs(ev.ts)}
+                        {fmtTimestamp(ev.ts)}
                       </td>
                       <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">
                         {ev.capability ? (

@@ -7,6 +7,7 @@ import {
   runtimeStats,
 } from "@/lib/runtime";
 import { listWebhooks } from "@/lib/config";
+import { fmtTimestamp } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +86,7 @@ export default async function RunOverviewPage() {
                   <div>
                     <div className="font-mono text-zinc-100">{d.slug}</div>
                     <div className="font-mono text-xs text-zinc-500">
-                      {d.received_at.replace("T", " ").replace("Z", "")}
+                      {fmtTimestamp(d.received_at)}
                     </div>
                   </div>
                   <div className="font-mono text-xs text-zinc-400">

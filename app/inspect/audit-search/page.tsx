@@ -1,5 +1,6 @@
 import { listAuditEvents, auditEventCounts, auditTotalLines } from "@/lib/audit";
 import { RegistryHeader } from "@/components/registry-header";
+import { fmtTimestamp } from "@/lib/time";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -15,10 +16,6 @@ function parseLimit(raw: string | undefined): number {
   const n = raw ? parseInt(raw, 10) : NaN;
   if (Number.isNaN(n)) return 200;
   return Math.min(Math.max(n, 1), 2000);
-}
-
-function fmtTs(ts: string): string {
-  return ts.replace("T", " ").replace("Z", "");
 }
 
 function recordSummary(ev: Record<string, unknown>): string {
@@ -105,7 +102,7 @@ export default async function AuditSearchPage({
                   {events.map((ev, idx) => (
                     <tr key={`${ev.ts}-${idx}`} className="border-t border-zinc-800 hover:bg-zinc-900/50 align-top">
                       <td className="px-4 py-2 text-zinc-400 font-mono text-xs whitespace-nowrap">
-                        {fmtTs(ev.ts)}
+                        {fmtTimestamp(ev.ts)}
                       </td>
                       <td className="px-4 py-2 text-zinc-100 font-mono text-xs whitespace-nowrap">
                         <Link

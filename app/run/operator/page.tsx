@@ -1,5 +1,6 @@
 import { recentOperatorRuns } from "@/lib/operator-runs";
 import { RegistryHeader } from "@/components/registry-header";
+import { fmtTimestamp } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -75,7 +76,7 @@ export default async function OperatorRunsPage() {
                     <td className="px-4 py-2.5 text-zinc-100 font-mono">{r.agent}</td>
                     <td className="px-4 py-2.5 text-zinc-500 font-mono text-xs">{r.run_id}</td>
                     <td className="px-4 py-2.5 text-zinc-400 font-mono text-xs">
-                      {r.started_at.replace("T", " ").replace("Z", "")}
+                      {fmtTimestamp(r.started_at)}
                     </td>
                     <td className="px-4 py-2.5">
                       <span

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { fmtTimestamp } from "@/lib/time";
 
 export type StreamedDelivery = {
   id: number;
@@ -173,7 +174,7 @@ export function WebhookTailLive({ seed, seedCount }: Props) {
                     }
                   >
                     <td className="px-4 py-2.5 text-zinc-400 font-mono text-xs">
-                      {d.received_at.replace("T", " ").replace("Z", "")}
+                      {fmtTimestamp(d.received_at)}
                     </td>
                     <td className="px-4 py-2.5 text-zinc-100 font-mono">{d.slug}</td>
                     <td className="px-4 py-2.5">
