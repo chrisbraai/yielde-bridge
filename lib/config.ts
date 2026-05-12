@@ -83,7 +83,9 @@ async function readJson<T>(path: string, fallback: T): Promise<T> {
   try {
     const st = await stat(path);
     if (!st.isFile()) return fallback;
-    const src = await readFile(path, "utf8");
+    let src = await readFile(path, "utf8");
+    // Strip UTF-8 BOM — Yielde OS files written from PowerShell carry one and JSON.parse rejects.
+    if (src.charCodeAt(0) === 0xfeff) src = src.slice(1);
     return JSON.parse(src) as T;
   } catch {
     return fallback;

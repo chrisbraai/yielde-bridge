@@ -1,125 +1,129 @@
-# Yielde Bridge — handoff (post Phase 2, self-review applied)
+# Yielde Bridge — handoff (post Phase 3)
 
-Last session: 2026-05-12, ended after Phase 2 ship + self-review pass. Next session picks up Phase 3 (Run room: live sessions, operator runs, webhook tail, cost meter — Bridge's first state-writing surface).
+Last session: 2026-05-12, ended after Phase 3 ship + UTF-8-BOM bugfix in `lib/sessions.ts` / `lib/config.ts`. Next session picks up Phase 4 (Inspect room + real skill dispatch + redaction/retention on archived webhook bodies).
 
 Repo HEADs at handoff:
 
 | Repo | HEAD | Branch |
 |---|---|---|
-| `yielde-bridge` | `c0eeb9a` | `main` |
-| `yielde-bridge-config` | `cef0d72` (Phase 0 empty stubs, fixture round-trip net-zero) | `main` |
-| `yielde-brain` | `aafcebb` | `master` |
+| `yielde-bridge` | _next commit (this session's Phase 3 ship)_ | `main` |
+| `yielde-bridge-config` | `fb05d0d` (smoke fixture round-trip, net-zero diff vs `cef0d72`) | `main` |
+| `yielde-brain` | `06c7210` (Phase 3 draft, awaiting `/brain-log promote`) | `master` |
 
 ---
 
 ## Handoff prompt (paste into a fresh Claude Code session)
 
-> Resume Yielde Bridge Phase 3.
+> Resume Yielde Bridge Phase 4.
 >
-> 1. Read `~/.claude/projects/C--Users-chris/memory/project_yielde_bridge.md` — Phase 0 ✅, Phase 1 ✅, Phase 2 ✅ (registries + Configure panels + `bridge` CLI + wired nav counts, 2026-05-12, HEAD `c0eeb9a`). Run all 6 "Verification on session resume" checks in that file before touching code.
-> 2. Read `C:\Users\chris\yielde-bridge\HANDOFF.md` (this file) for the Phase 3 plan, open follow-ups, and smoke tests.
-> 3. Read `C:\Users\chris\yielde-bridge\AGENTS.md` — the Next.js 16 / Turbopack / React 19 quirks plus the load-bearing **rule #3**: Phase 3 is the first phase where Bridge writes state. SQLite for the webhook archive at `~/.claude/bridge/runtime/`.
-> 4. **Do NOT load `~/.claude/CLAUDE.md`'s full brain index unless a task explicitly touches `yielde-platform`, `yielde-site`, a client slug, or co-founder work.** This session is repo-local to `yielde-bridge` and `yielde-bridge-config`. Brain writes still go through `brain-gatekeeper`'s `_inbox/` rules — never edit canonical paths (`Decisions/`, `Incidents/`, `Staff/`, `Clients/`, `SOPs/`, `Platform/`, `Site/`, `Glossary.md`, `Backlog.md`, `INDEX.md`, `Alignment.excalidraw.md`).
-> 5. Start Phase 3: `lib/runtime.ts` SQLite wrapper, `app/run/{sessions,operator,webhook-tail,cost}/page.tsx` real panels, `app/api/webhooks/[slug]/route.ts` inbound receiver with HMAC verify. See Phase 3 plan below.
-> 6. At meaningful milestones, write a draft to `yielde-brain/_inbox/YYYY-MM-DD-HHMM-<slug>.md` per the `brain-gatekeeper` schema, commit, and push. Never silent. Never canonical.
+> 1. Read `~/.claude/projects/C--Users-chris/memory/project_yielde_bridge.md` — Phase 0–3 ✅. Run all 9 "Verification on session resume" checks in that file before touching code.
+> 2. Read `C:\Users\chris\yielde-bridge\HANDOFF.md` (this file) for the Phase 4 plan, open follow-ups, and smoke tests.
+> 3. Read `C:\Users\chris\yielde-bridge\AGENTS.md` — Next.js 16 / Turbopack / React 19 quirks plus the load-bearing **rule #3** (Bridge writes via `runtime.db`, never to `yielde-bridge-config/` from server routes).
+> 4. **Do NOT load `~/.claude/CLAUDE.md`'s full brain index unless a task explicitly touches `yielde-platform`, `yielde-site`, a client slug, or co-founder work.** Brain writes still go through `brain-gatekeeper`'s `_inbox/` rules — never edit canonical paths.
+> 5. Start Phase 4: Inspect room (audit search, `_inbox/` diff+promote, capability decisions, skill traces), real skill dispatch from webhook receiver (turn `target_skill` from logged intent into a real invocation), redaction + retention sweep on `webhook_deliveries.body_blob`, SSE-based real-time tail.
+> 6. At meaningful milestones, write a draft to `yielde-brain/_inbox/YYYY-MM-DD-HHMM-<slug>.md` per the `brain-gatekeeper` schema, commit, and push.
 >
-> Work without stopping to ask clarifying questions when the reasonable call is obvious. Use TaskCreate to track multi-step work.
+> Work without stopping to ask clarifying questions when the reasonable call is obvious.
 
 ---
 
-## What shipped (Phase 2, including self-review pass)
+## What shipped (Phase 3)
 
 | Repo | Commits | Highlights |
 |---|---|---|
-| `yielde-bridge` | `c6bf4d6` → `e92440a` → `c0eeb9a` | Phase 2 core + HANDOFF + self-review (nav counts wired, README updated) |
-| `yielde-bridge-config` | `a772acc` → `cef0d72` | 8 commits across fixture round-trip — net zero, HEAD back at empty Phase 0 stubs |
-| `yielde-brain` | `aafcebb` | `_inbox/2026-05-12-1556-yielde-bridge-phase-2-shipped.md` (awaiting `/brain-log promote`) |
+| `yielde-bridge` | `72e9f58` → _this commit_ | Run room (5 panels) + SQLite runtime + HMAC webhook receiver + BOM bugfix |
+| `yielde-bridge-config` | `cef0d72` → `fb05d0d` | smoke fixture round-trip — 4 commits, net-zero |
+| `yielde-brain` | `06c7210` | `_inbox/2026-05-12-1644-yielde-bridge-phase-3-shipped.md` |
 
 **Files in `yielde-bridge` that landed this phase:**
 
-- `lib/config.ts` — server-only reader for `yielde-bridge-config/*.json` + capabilities mirror from `~/.claude/os/capabilities/registry.json`. Exports `listMcpServers`, `listApiConnectors`, `listWebhooks`, `listSecretRefs`, `listCapabilities`, `registryCounts`.
-- `app/configure/{mcp,api,webhooks,secret-refs,capabilities}/page.tsx` — 5 real tables, all `force-dynamic`.
-- `components/registry-{empty,header}.tsx` — shared shell pieces matching the `/configure/skills` visual language.
-- `components/configure-nav.tsx` — refactored to **async server component** fetching `registryCounts()` + `listSkills()`. Counts pass as props to:
-- `components/configure-nav-links.tsx` — new **client child** owning `usePathname()` and active-link styling.
-- `app/configure/layout.tsx` — now async + `force-dynamic` so the nav re-counts on every render.
-- `scripts/bridge.mjs` — Node CLI with `sync`/`list`/`add`/`remove`. Subcommands cover MCP, API, webhook (inbound + outbound), secret-ref. Regex-based secret-leak guard: literal `sk-…`, `ghp_…`, `xox[bp]-…`, `AIza…`, JWT-shape tokens trip an `exit 2` before disk write. Wired as `bin.bridge` + `npm run bridge`.
-- `README.md` — refreshed to Phase 2; HANDOFF.md remains the canonical session-resume document.
+- `lib/runtime.ts` — `better-sqlite3` wrapper. WAL, foreign keys on, schema init on first read. Three tables: `webhook_deliveries` (slug, payload_hash, status, http_code, reason, body_blob), `operator_runs` (agent, run_id, started/finished, status, exit, cost_cents, tokens), `sessions` (placeholder for future kernel writes). Per-slug retention prune (last 100) on every webhook insert. `listDailyCostBuckets(days)` uses a recursive-CTE date sequence so the cost page never calls `Date.now()` in render (React 19 `react-hooks/purity` rule).
+- `lib/operator-runs.ts` — idempotent sync of `~/.claude/operator/runs/<agent>/*.jsonl` into `operator_runs` via UPSERT on `(agent, run_id)`. Tolerates partial JSONL.
+- `lib/sessions.ts` — read-only view of `~/.claude/os/sessions.json`, active-first.
+- `lib/secret-resolver.ts` — per-request resolution; `env` only this phase, other providers throw typed `SecretResolveError` for clean 503s.
+- `app/run/{layout,page,sessions,operator,webhook-tail,cost}/*.tsx` — 5 real panels replacing `PhasePlaceholder`. `force-dynamic` everywhere.
+- `components/run-nav.tsx` (async server) + `components/run-nav-links.tsx` (client child with `usePathname`) — same split as Phase 2's `ConfigureNav`.
+- `app/api/webhooks/[slug]/route.ts` — HMAC-SHA256 receiver with `timingSafeEqual`. Accepts `x-signature`, `x-hub-signature-256`, or `x-yielde-signature`; strips `sha256=` prefix. Persists every delivery (accepted **and** rejected) to `webhook_deliveries`.
+- `scripts/probe-runtime.mjs` — diagnostic; prints table list + row counts + recent operator runs and deliveries.
+- `scripts/smoke-webhook.mjs` — end-to-end smoke; signed accept, tampered reject, no-sig reject, unknown-slug reject. Reads `SMOKE_WEBHOOK_SECRET` from env.
+- `lib/sessions.ts` + `lib/config.ts` — UTF-8 BOM strip before `JSON.parse`. PowerShell-written files (incl. `~/.claude/os/sessions.json`) carry a BOM that vanilla `JSON.parse` rejects. Applied defensively to both readers since registries could land BOM'd too.
 
 ---
 
-## Phase 3 plan (Run room + SQLite runtime)
-
-**Invariant change:** Phase 3 is the first phase where Bridge **writes** runtime state. The registry repo (`yielde-bridge-config/`) is still read-only from server routes — all registry mutations stay funneled through `scripts/bridge.mjs` + git. Phase 3 adds a separate **runtime layer** at `~/.claude/bridge/runtime/` (SQLite). Keep these two distinguished: registry = source-of-truth in git, runtime = local cache + audit + replay.
+## Phase 4 plan (Inspect room + dispatch + redaction)
 
 ### Files to land (`yielde-bridge`)
 
-1. **`lib/runtime.ts`** — SQLite wrapper using `better-sqlite3` (sync API, plays well on Windows, no native rebuild dance for our scale).
-   - Init schema on first read. Single-file DB at `~/.claude/bridge/runtime/runtime.db` (override via `YIELDE_BRIDGE_RUNTIME_DB` env).
-   - Tables:
-     - `webhook_deliveries(id, slug, received_at, source_ip, payload_hash, status, http_code, body_blob)` — retention via trigger or scheduled prune (keep last 100 per slug).
-     - `operator_runs(id, agent, started_at, finished_at, exit_code, cost_cents, tokens_in, tokens_out)`.
-     - `sessions(id, harness, started_at, ended_at, model, tokens_in, tokens_out, cost_cents)`.
-   - All reads return typed records. All writes wrap in a single transaction.
+1. **Real skill dispatch on accepted webhook** (`app/api/webhooks/[slug]/route.ts`).
+   - Today: accepted delivery returns 202 + logs dispatch intent in `webhook_deliveries.reason`.
+   - Phase 4: invoke the configured `targetSkill`. Two viable surfaces: shell out to a CLI runner (`operator-bridge` skill via `/operator deploy`), or in-process Node import of a SKILL.md handler. Probably start with `operator-bridge` for parity with Tier 2 Devon/Lyell routing.
+   - Add `dispatched` table or `dispatch_status` column to `webhook_deliveries` so retries are tracked.
 
-2. **`app/run/sessions/page.tsx`** — Claude Code session table. Source: `~/.claude/sessions.json` if it exists, else gracefully empty. Columns: started, harness, model, tokens, cost, duration.
+2. **Redaction + retention sweep** (`lib/runtime.ts`).
+   - Today: raw bodies persist forever subject only to the 100-per-slug cap.
+   - Phase 4: optional per-slug redaction map (regex/JSON-path) before storing. Retention sweep job that respects per-slug TTL.
+   - **Before any real PII can land.** Today's smoke payloads are synthetic.
 
-3. **`app/run/operator/page.tsx`** — `/operator deploy <name>` runs with cost + exit. Source: `~/.claude/operator/runs/` log files (check actual shape on disk first; assume newline-delimited JSON per run).
+3. **Inspect room** (`app/inspect/{audit-search,brain-inbox,capability-decisions,skill-traces}/page.tsx`).
+   - Audit search over `~/.claude/os/audit.jsonl` (kernel writes).
+   - `yielde-brain/_inbox/*.md` diff + promote — UI calls into `brain-gatekeeper`'s promote flow; never touches canonical paths.
+   - Capability decision log over `~/.claude/os/proposals/`.
+   - Skill traces — pull from telemetry sidecar.
 
-4. **`app/run/webhook-tail/page.tsx`** — last 100 inbound deliveries across all slugs. Server-side polling via `force-dynamic` for now (no client WebSocket until Phase 4).
+4. **Real-time webhook tail** (`app/run/webhook-tail`).
+   - Today: `force-dynamic` server polling.
+   - Phase 4: SSE endpoint at `/api/webhooks/_stream`; client subscribes and prepends rows live.
 
-5. **`app/run/cost/page.tsx`** — daily roll-up from `sessions` + `operator_runs`. Tiny sparkline + per-source bar.
-
-6. **`app/api/webhooks/[slug]/route.ts`** — inbound webhook receiver.
-   - Lookup `slug` in `webhook.json.inbound` via `lib/config.ts`.
-   - Resolve `secretRef` → fetch from OS keychain / Infisical / env / gh-secret per `secret-refs.json` provider. **Never cache beyond the single request.**
-   - Verify HMAC-SHA256 of raw body against `X-Signature` header (or whatever the slug declares).
-   - On success: persist to `webhook_deliveries`, dispatch to `targetSkill` (Phase 3 stub: just log the dispatch intent; actual skill invocation can wait for Phase 4).
-   - On bad sig: 401, log to `webhook_deliveries` with `status=rejected`.
-
-### Configure-room follow-ups (none — self-review closed them)
-
-The Phase 2 nav-counts gap is fixed. No outstanding Configure work blocks Phase 3.
+5. **Kernel-side cost backfill** (`sessions` table).
+   - Today: empty.
+   - Phase 4: Yielde OS kernel writes a row per session close with token/cost totals. Cost page stops being decorative.
 
 ### Hard rules (don't break)
 
-- **Bridge reads-only from `yielde-bridge-config/`** — Phase 3 writes go to `~/.claude/bridge/runtime/runtime.db` instead. Different file tree, different invariant. Server routes still never touch the registry repo.
-- **Webhook secrets resolved at request time** — fetched fresh from OS keychain / Infisical per delivery. Never cache beyond the single request. `secret-refs.json` only names the path.
-- **`better-sqlite3` is sync** — fine at our scale, but never call from a hot loop. Wrap reads in `force-dynamic` pages, wrap writes in single transactions.
-- **No PII in `webhook_deliveries.body_blob` without a retention plan.** Phase 3 stores raw bodies for replay; Phase 4 adds a redaction layer + retention sweep.
+- **Bridge reads-only from `yielde-bridge-config/`** — all registry writes still go through `scripts/bridge.mjs`.
+- **Webhook secrets resolved at request time** — never cache beyond the single request. `secret-refs.json` only names the path.
+- **`better-sqlite3` is sync** — wrap reads in `force-dynamic` pages, wrap writes in single transactions.
+- **No raw PII in `webhook_deliveries.body_blob` without a retention plan** — Phase 4 must land redaction before any real-world signed webhook integration goes live.
 - **Brain writes** still go through `brain-gatekeeper`'s `_inbox/` rules.
-- **File-guard pattern** still blocks filenames containing `secret` (plural). Stick to `secret-refs.json` and similar.
+- **File-guard pattern** still blocks filenames containing `secrets` (plural). Use singular `secret-resolver.ts`, `secret-refs.json`, etc.
+- **UTF-8 BOM strip in JSON readers** — keep both `lib/sessions.ts` and `lib/config.ts`'s `readJson` BOM-tolerant. Any future JSON reader added under `lib/` should do the same.
 
-### Verification gate before Phase 3 commit
+### Verification gate before Phase 4 commit
 
 - `npx tsc --noEmit` clean
 - `npx eslint --max-warnings=0 lib/ components/ app/` clean
-- `/run/{sessions,operator,webhook-tail,cost}` all render (likely empty) tables, not `PhasePlaceholder`
-- POST a signed payload to `/api/webhooks/<slug>` for a configured inbound; row appears in webhook-tail; bad signature → 401, also logged
-- `~/.claude/bridge/runtime/runtime.db` exists and is queryable from `sqlite3` CLI
+- `/inspect/*` all render real data, not `PhasePlaceholder`
+- POST a signed payload — `webhook_deliveries.dispatch_status` reflects the actual skill run (success or failure), not just "intent: <name>"
+- Redaction map applied before `body_blob` write for a slug that has one configured
+- Real-time tail emits SSE event within < 1s of an accepted delivery
 - New brain draft in `_inbox/` describing what shipped, committed and pushed
 
 ---
 
 ## Open follow-ups (not blockers)
 
-1. **`parseFrontmatter` triplication.** Still 3 copies (`lib/skills.ts` TS, `yielde-skills/scripts/build-index.mjs`, `yielde-skills/scripts/import-hermes.mjs`). Phase 2 didn't add a 4th caller — config reads JSON, not YAML. Extract to `yielde-skills/lib/frontmatter.mjs` only when a 4th YAML caller appears.
+1. **`parseFrontmatter` triplication.** Still 3 copies (`lib/skills.ts` TS, `yielde-skills/scripts/build-index.mjs`, `yielde-skills/scripts/import-hermes.mjs`). Phase 3 didn't add a 4th caller. Extract when a 4th YAML caller appears.
 
-2. **`pinned` boolean parsing inconsistency.** Same status since Phase 1 — both implementations work for current data. Same fix as #1.
+2. **`pinned` boolean parsing inconsistency.** Same status since Phase 1.
 
-3. **Windows libuv shutdown assertion.** Encoded in `app/api/skills/import-hermes/route.ts`. Reapply the same `result.code === N || stderr-substring-match` pattern to any Phase 3 endpoint that spawns Node scripts (e.g. if the webhook dispatcher ever shells out to `bridge` or a skill runner).
+3. **Windows libuv shutdown assertion.** Encoded in `app/api/skills/import-hermes/route.ts`. Reapply the `result.code === N || stderr-substring-match` pattern to any Phase 4 endpoint that spawns Node scripts (likely the dispatcher).
 
-4. **`/brain-log promote` outstanding for four drafts** (Chris-only action; agent must not promote):
+4. **`/brain-log promote` outstanding for five drafts** (Chris-only action; agent must not promote):
    - `_inbox/2026-05-12-yielde-bridge-phase-0-kickoff.md` (decision)
    - `_inbox/2026-05-12-yielde-bridge-phase-0-complete.md` (staff-work)
    - `_inbox/2026-05-12-1326-yielde-bridge-phase-1-shipped.md` (staff-work)
    - `_inbox/2026-05-12-1556-yielde-bridge-phase-2-shipped.md` (staff-work)
+   - `_inbox/2026-05-12-1644-yielde-bridge-phase-3-shipped.md` (staff-work)
 
-5. **LF/CRLF noise.** Every Windows commit warns. Cosmetic. `.gitattributes` with `* text=auto eol=lf` in all three repos would silence it. Deferred.
+5. **LF/CRLF noise.** Every Windows commit warns. Cosmetic. `.gitattributes` with `* text=auto eol=lf` in all three repos would silence it.
 
-6. **`scripts/bridge.mjs` `DEFAULT_BODY` duplicates schema knowledge** with empty stubs in `yielde-bridge-config`. Single-source on schema bumps; safe today at schema_version 1.0 across the board.
+6. **`scripts/bridge.mjs` `DEFAULT_BODY` schema duplication.** Still safe at schema_version 1.0.
 
-7. **5 inline badge components** (`TransportBadge`, `AuthBadge`, `VerifyBadge`, `ProviderBadge`, `GateBadge`) follow the existing inline `ProvenanceBadge` pattern. Consolidation to a generic `<Badge variant={...}>` is premature — each carries distinct domain semantics.
+7. **`syncOperatorRuns()` is called twice per render** (`RunNav` + page-level). Idempotent + fast (~9 files), but if `~/.claude/operator/runs/` grows past hundreds of agents, gate behind a React `cache()` or a request-scoped singleton.
+
+8. **`sessions/page.tsx` `relative()` calls `Date.now()` during render.** Lint accepted it (lives in a module-level helper) but it's the same impurity the cost page got flagged for. Acceptable on a `force-dynamic` server page; revisit if React 19's purity rule tightens.
+
+9. **Inline badge components (TransportBadge, AuthBadge, VerifyBadge, ProviderBadge, GateBadge, RunStatusBadge, SessionRoleBadge, …).** Now 7+ near-clones. Consolidation to a generic `<Badge variant>` is starting to make sense — pull the trigger in Phase 4.
 
 ---
 
@@ -129,13 +133,15 @@ The Phase 2 nav-counts gap is fixed. No outstanding Configure work blocks Phase 
 |---|---|
 | Bridge app | `C:\Users\chris\yielde-bridge\` (Next.js 16, `npm run dev` → :3030) |
 | Skills repo (public, MIT) | `C:\Users\chris\yielde-skills\` |
-| Config repo (private) | `C:\Users\chris\yielde-bridge-config\` — empty Phase 0 stubs at HEAD `cef0d72` |
+| Config repo (private) | `C:\Users\chris\yielde-bridge-config\` — empty Phase 0 stubs at HEAD `fb05d0d` |
 | Brain | `C:\Users\chris\yielde-brain\` — write `_inbox/` ONLY |
 | Project memory | `~/.claude/projects/C--Users-chris/memory/project_yielde_bridge.md` |
 | Yielde OS capabilities | `~/.claude/os/capabilities/registry.json` (36 caps, 2 hard-gated) |
+| Yielde OS sessions | `~/.claude/os/sessions.json` (UTF-8 BOM — readers must strip) |
+| Operator runs | `~/.claude/operator/runs/<agent>/*.jsonl` |
 | Junctions | `~/.claude/skills/{yielde,hermes}/` → `yielde-skills/skills/{yielde,hermes}/` |
 | Telemetry sidecar | `~/.claude/skills/.usage.json` |
-| Phase 3 runtime DB (will exist) | `~/.claude/bridge/runtime/runtime.db` |
+| Runtime DB | `~/.claude/bridge/runtime/runtime.db` (`YIELDE_BRIDGE_RUNTIME_DB` override) |
 
 ## `bridge` CLI cheatsheet
 
@@ -152,57 +158,25 @@ node scripts/bridge.mjs add secret-ref <name> --provider infisical|os-keychain|e
 node scripts/bridge.mjs remove mcp|api|webhook|secret-ref <name>
 ```
 
-Override config root via `YIELDE_BRIDGE_CONFIG_ROOT=/path/to/config`. Secret-leak guard refuses literal `sk-…`, `ghp_…`, `xox[bp]-…`, `AIza…`, JWT-shape tokens with `exit 2` — fail closed, no disk write.
-
-## Smoke tests to run before any Phase 3 work
+## Runtime DB probes
 
 ```bash
-# 1. Junctions intact + registries empty
-ls /c/Users/chris/.claude/skills/yielde   # 4 dirs
-ls /c/Users/chris/.claude/skills/hermes   # 5 dirs
-grep -c '"servers": {}'  /c/Users/chris/yielde-bridge-config/mcp.json         # 1
-grep -c '"connectors": {}' /c/Users/chris/yielde-bridge-config/api.json       # 1
+# Inspect runtime.db (schema, row counts, recent rows)
+node scripts/probe-runtime.mjs
 
-# 2. Bridge typechecks + lints clean
-cd /c/Users/chris/yielde-bridge && npx tsc --noEmit && npx eslint --max-warnings=0 lib/ components/ app/
-
-# 3. Dev server serves every Configure panel
-npm run dev   # background
-for p in mcp api webhooks secret-refs capabilities skills; do
-  curl -s -o /dev/null -w "/$p %{http_code}\n" http://localhost:3030/configure/$p
-done
-# expect: all 200
-
-# 4. Nav badges render live counts
-curl -s http://localhost:3030/configure/skills | grep -oE 'tabular-nums">[0-9]+' | head -6
-# expect: Skills=9, Capabilities=36, MCP/API/Webhooks/Secrets=0 (in some order)
-
-# 5. Capabilities panel surfaces real OS registry data
-curl -s http://localhost:3030/configure/capabilities | grep -c paystack-live   # >= 1
-
-# 6. CLI round-trips (leaves config repo back at HEAD cef0d72)
-node scripts/bridge.mjs add mcp smoke-test --transport stdio --command "echo ok"
-node scripts/bridge.mjs list mcp | grep -c smoke-test    # 1
-node scripts/bridge.mjs remove mcp smoke-test
-node scripts/bridge.mjs list mcp | grep -c smoke-test    # 0
-
-# 7. Secret-leak guard fails closed
-node scripts/bridge.mjs add api leak --base-url https://x --auth-ref "sk-12345678901234567890123456789012"
-# expect: exit 2, refusal message; no write to api.json
-
-# 8. Telemetry round-trips (Phase 1 regression check)
-curl -s -X POST -H 'content-type: application/json' -d '{"name":"arxiv"}' http://localhost:3030/api/skills/use
-cat /c/Users/chris/.claude/skills/.usage.json | grep -c '"arxiv"'   # >= 1
+# End-to-end webhook smoke (add fixture first via bridge CLI, then export the env)
+node scripts/bridge.mjs add secret-ref smoke-webhook-secret --provider env --path SMOKE_WEBHOOK_SECRET
+node scripts/bridge.mjs add webhook smoke-test --target-skill noop --secret-ref smoke-webhook-secret
+SMOKE_WEBHOOK_SECRET=phase3-test-secret npm run dev   # in another shell
+node scripts/smoke-webhook.mjs
+# Expect: 202 (signed) / 401 (tampered) / 401 (no-sig) / 404 (unknown slug)
+node scripts/bridge.mjs remove webhook smoke-test
+node scripts/bridge.mjs remove secret-ref smoke-webhook-secret
 ```
-
-If any check fails, diagnose before opening Phase 3.
 
 ---
 
-## Phase 4+ on the radar (for context only — do not start)
+## Phase 5+ on the radar (for context only — do not start)
 
-- **Phase 4 — Inspect room.** Audit search, brain `_inbox/` diff+promote UI, capability decision log, skill traces, signed-webhook redaction layer.
 - **Phase 5 — Co-founder rollout.** Node-only CLI fallback for Devon/Lyell, GitHub-issue handoff skill for capability escalation.
 - **Phase 6 — Innovation tier.** Skill provenance graph, eval harness, curator with Chris-approve, bulk Hermes import.
-
-These are deliberately out-of-scope until Phase 3 is verified end-to-end.

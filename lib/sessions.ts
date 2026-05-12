@@ -50,6 +50,8 @@ export async function listSessions(): Promise<SessionRow[]> {
   } catch {
     return [];
   }
+  // Yielde OS writes sessions.json from PowerShell, which emits a UTF-8 BOM that JSON.parse rejects.
+  if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
   let data: OsSessionsFile;
   try {
     data = JSON.parse(raw) as OsSessionsFile;
