@@ -1,4 +1,5 @@
 import { listCapabilities } from "@/lib/config";
+import { Badge } from "@/components/badge";
 import { RegistryHeader } from "@/components/registry-header";
 
 export const dynamic = "force-dynamic";
@@ -85,23 +86,7 @@ export default async function CapabilitiesPage() {
 }
 
 function GateBadge({ available, hardGate }: { available: boolean; hardGate: boolean }) {
-  if (hardGate) {
-    return (
-      <span className="inline-block px-2 py-0.5 text-xs rounded border font-mono border-red-700/50 bg-red-900/20 text-red-400">
-        hard-gate
-      </span>
-    );
-  }
-  if (!available) {
-    return (
-      <span className="inline-block px-2 py-0.5 text-xs rounded border font-mono border-amber-700/50 bg-amber-900/20 text-amber-400">
-        refused
-      </span>
-    );
-  }
-  return (
-    <span className="inline-block px-2 py-0.5 text-xs rounded border font-mono border-emerald-700/50 bg-emerald-900/20 text-emerald-400">
-      allowed
-    </span>
-  );
+  if (hardGate) return <Badge variant="danger">hard-gate</Badge>;
+  if (!available) return <Badge variant="warn">refused</Badge>;
+  return <Badge variant="success">allowed</Badge>;
 }

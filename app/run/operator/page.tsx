@@ -1,4 +1,5 @@
 import { recentOperatorRuns } from "@/lib/operator-runs";
+import { Badge, type BadgeVariant } from "@/components/badge";
 import { RegistryHeader } from "@/components/registry-header";
 import { fmtTimestamp } from "@/lib/time";
 
@@ -63,14 +64,14 @@ export default async function OperatorRunsPage() {
                   r.tokens_in === null && r.tokens_out === null
                     ? "—"
                     : `${(r.tokens_in ?? 0) + (r.tokens_out ?? 0)}`;
-                const statusColor =
+                const statusVariant: BadgeVariant =
                   r.status === "success"
-                    ? "border-emerald-700/50 bg-emerald-900/20 text-emerald-400"
+                    ? "success"
                     : r.status === "running"
-                      ? "border-blue-700/50 bg-blue-900/20 text-blue-400"
+                      ? "info"
                       : r.status === null
-                        ? "border-zinc-700/50 bg-zinc-900/40 text-zinc-500"
-                        : "border-rose-700/50 bg-rose-900/20 text-rose-400";
+                        ? "muted"
+                        : "danger";
                 return (
                   <tr key={r.id} className="border-t border-zinc-800 hover:bg-zinc-900/50">
                     <td className="px-4 py-2.5 text-zinc-100 font-mono">{r.agent}</td>
@@ -79,14 +80,7 @@ export default async function OperatorRunsPage() {
                       {fmtTimestamp(r.started_at)}
                     </td>
                     <td className="px-4 py-2.5">
-                      <span
-                        className={
-                          "inline-block px-2 py-0.5 text-xs rounded border font-mono " +
-                          statusColor
-                        }
-                      >
-                        {r.status ?? "unknown"}
-                      </span>
+                      <Badge variant={statusVariant}>{r.status ?? "unknown"}</Badge>
                     </td>
                     <td className="px-4 py-2.5 text-right text-zinc-400 font-mono tabular-nums text-xs">
                       {fmtDuration(r.started_at, r.finished_at)}

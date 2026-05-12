@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Badge, type BadgeVariant } from "@/components/badge";
 import { fmtTimestamp } from "@/lib/time";
 
 export type StreamedDelivery = {
@@ -27,17 +28,17 @@ type Props = {
 
 type ConnState = "connecting" | "live" | "reconnecting" | "closed";
 
-const STATUS_COLOR: Record<string, string> = {
-  accepted: "border-emerald-700/50 bg-emerald-900/20 text-emerald-400",
-  rejected: "border-amber-700/50 bg-amber-900/20 text-amber-400",
-  error: "border-rose-700/50 bg-rose-900/20 text-rose-400",
+const STATUS_VARIANT: Record<string, BadgeVariant> = {
+  accepted: "success",
+  rejected: "warn",
+  error: "danger",
 };
 
-const DISPATCH_COLOR: Record<string, string> = {
-  succeeded: "border-emerald-700/50 bg-emerald-900/20 text-emerald-400",
-  queued: "border-blue-700/50 bg-blue-900/20 text-blue-300",
-  failed: "border-rose-700/50 bg-rose-900/20 text-rose-400",
-  skipped: "border-zinc-700 bg-zinc-900 text-zinc-400",
+const DISPATCH_VARIANT: Record<string, BadgeVariant> = {
+  succeeded: "success",
+  queued: "info",
+  failed: "danger",
+  skipped: "muted",
 };
 
 function isFresh(rowTs: string, now: number): boolean {
@@ -178,7 +179,7 @@ export function WebhookTailLive({ seed, seedCount }: Props) {
                     </td>
                     <td className="px-4 py-2.5 text-zinc-100 font-mono">{d.slug}</td>
                     <td className="px-4 py-2.5">
-                      <Badge color={STATUS_COLOR[d.status] ?? STATUS_COLOR.error!}>
+                      <Badge variant={STATUS_VARIANT[d.status] ?? "danger"}>
                         {d.status}
                       </Badge>
                     </td>
@@ -187,11 +188,7 @@ export function WebhookTailLive({ seed, seedCount }: Props) {
                     </td>
                     <td className="px-4 py-2.5">
                       <Badge
-                        color={
-                          d.dispatch_status
-                            ? DISPATCH_COLOR[d.dispatch_status] ?? DISPATCH_COLOR.skipped!
-                            : "border-zinc-800 bg-zinc-900/40 text-zinc-600"
-                        }
+                        variant={d.dispatch_status ? (DISPATCH_VARIANT[d.dispatch_status] ?? "muted") : "muted"}
                         title={d.dispatch_target ? `target: ${d.dispatch_target}` : undefined}
                       >
                         {d.dispatch_status ?? "—"}
@@ -224,21 +221,3 @@ export function WebhookTailLive({ seed, seedCount }: Props) {
   );
 }
 
-function Badge({
-  color,
-  children,
-  title,
-}: {
-  color: string;
-  children: React.ReactNode;
-  title?: string;
-}) {
-  return (
-    <span
-      className={"inline-block px-2 py-0.5 text-xs rounded border font-mono " + color}
-      title={title}
-    >
-      {children}
-    </span>
-  );
-}

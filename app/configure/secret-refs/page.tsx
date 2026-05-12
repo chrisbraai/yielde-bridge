@@ -1,4 +1,5 @@
 import { listSecretRefs } from "@/lib/config";
+import { Badge, type BadgeVariant } from "@/components/badge";
 import { RegistryEmpty } from "@/components/registry-empty";
 import { RegistryHeader } from "@/components/registry-header";
 
@@ -59,17 +60,13 @@ export default async function SecretRefsPage() {
   );
 }
 
+const PROVIDER_VARIANT: Record<string, BadgeVariant> = {
+  infisical: "success",
+  "os-keychain": "info",
+  env: "warn",
+  "gh-secret": "accent",
+};
+
 function ProviderBadge({ provider }: { provider: string }) {
-  const styles: Record<string, string> = {
-    infisical: "border-emerald-700/50 bg-emerald-900/20 text-emerald-400",
-    "os-keychain": "border-blue-700/50 bg-blue-900/20 text-blue-400",
-    env: "border-amber-700/50 bg-amber-900/20 text-amber-400",
-    "gh-secret": "border-purple-700/50 bg-purple-900/20 text-purple-400",
-  };
-  const cls = styles[provider] || "border-zinc-700 bg-zinc-900 text-zinc-400";
-  return (
-    <span className={`inline-block px-2 py-0.5 text-xs rounded border font-mono ${cls}`}>
-      {provider}
-    </span>
-  );
+  return <Badge variant={PROVIDER_VARIANT[provider] ?? "muted"}>{provider}</Badge>;
 }

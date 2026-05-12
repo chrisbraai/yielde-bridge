@@ -1,4 +1,5 @@
 import { listSessions } from "@/lib/sessions";
+import { Badge } from "@/components/badge";
 import { RegistryHeader } from "@/components/registry-header";
 
 export const dynamic = "force-dynamic";
@@ -58,28 +59,14 @@ export default async function SessionsPage() {
                 return (
                   <tr key={s.id} className="border-t border-zinc-800 hover:bg-zinc-900/50">
                     <td className="px-4 py-2.5">
-                      <span
-                        className={
-                          "inline-block px-2 py-0.5 text-xs rounded border font-mono " +
-                          (s.role === "kernel"
-                            ? "border-amber-700/50 bg-amber-900/20 text-amber-400"
-                            : "border-zinc-700 bg-zinc-900 text-zinc-300")
-                        }
-                      >
+                      <Badge variant={s.role === "kernel" ? "warn" : "muted"}>
                         {s.role || "worker"}
-                      </span>
+                      </Badge>
                     </td>
                     <td className="px-4 py-2.5">
-                      <span
-                        className={
-                          "inline-block px-2 py-0.5 text-xs rounded border font-mono " +
-                          (isActive
-                            ? "border-emerald-700/50 bg-emerald-900/20 text-emerald-400"
-                            : "border-zinc-700/50 bg-zinc-900/40 text-zinc-500")
-                        }
-                      >
+                      <Badge variant={isActive ? "success" : "muted"}>
                         {s.status || "unknown"}
-                      </span>
+                      </Badge>
                     </td>
                     <td className="px-4 py-2.5 text-zinc-300 max-w-md truncate" title={s.intent}>
                       {s.intent || <span className="text-zinc-600">—</span>}

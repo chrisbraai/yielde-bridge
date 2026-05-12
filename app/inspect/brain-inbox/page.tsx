@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { listBrainInboxDrafts, type BrainDraft } from "@/lib/brain-inbox";
+import { Badge, type BadgeVariant } from "@/components/badge";
 import { RegistryHeader } from "@/components/registry-header";
 import { fmtTimestamp } from "@/lib/time";
 
@@ -7,13 +8,13 @@ export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<{ file?: string }>;
 
-const KIND_STYLE: Record<string, string> = {
-  decision: "border-blue-700/50 bg-blue-900/20 text-blue-300",
-  incident: "border-rose-700/50 bg-rose-900/20 text-rose-300",
-  "staff-work": "border-emerald-700/50 bg-emerald-900/20 text-emerald-300",
-  "sop-update": "border-amber-700/50 bg-amber-900/20 text-amber-300",
-  "client-update": "border-purple-700/50 bg-purple-900/20 text-purple-300",
-  unknown: "border-zinc-700 bg-zinc-900 text-zinc-400",
+const KIND_VARIANT: Record<string, BadgeVariant> = {
+  decision: "info",
+  incident: "danger",
+  "staff-work": "success",
+  "sop-update": "warn",
+  "client-update": "accent",
+  unknown: "muted",
 };
 
 export default async function BrainInboxPage({
@@ -85,12 +86,7 @@ export default async function BrainInboxPage({
 }
 
 function KindBadge({ kind }: { kind: string }) {
-  const cls = KIND_STYLE[kind] ?? KIND_STYLE.unknown!;
-  return (
-    <span className={"inline-block px-1.5 py-0.5 text-[10px] rounded border font-mono whitespace-nowrap " + cls}>
-      {kind}
-    </span>
-  );
+  return <Badge variant={KIND_VARIANT[kind] ?? "muted"} size="sm">{kind}</Badge>;
 }
 
 function DraftView({ draft }: { draft: BrainDraft }) {

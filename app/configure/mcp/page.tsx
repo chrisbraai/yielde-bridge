@@ -1,4 +1,5 @@
 import { listMcpServers } from "@/lib/config";
+import { Badge, type BadgeVariant } from "@/components/badge";
 import { RegistryEmpty } from "@/components/registry-empty";
 import { RegistryHeader } from "@/components/registry-header";
 
@@ -59,16 +60,12 @@ export default async function McpPage() {
   );
 }
 
+const TRANSPORT_VARIANT: Record<string, BadgeVariant> = {
+  stdio: "success",
+  sse: "info",
+  http: "accent",
+};
+
 function TransportBadge({ transport }: { transport: string }) {
-  const styles: Record<string, string> = {
-    stdio: "border-emerald-700/50 bg-emerald-900/20 text-emerald-400",
-    sse: "border-blue-700/50 bg-blue-900/20 text-blue-400",
-    http: "border-purple-700/50 bg-purple-900/20 text-purple-400",
-  };
-  const cls = styles[transport] || "border-zinc-700 bg-zinc-900 text-zinc-400";
-  return (
-    <span className={`inline-block px-2 py-0.5 text-xs rounded border font-mono ${cls}`}>
-      {transport}
-    </span>
-  );
+  return <Badge variant={TRANSPORT_VARIANT[transport] ?? "muted"}>{transport}</Badge>;
 }

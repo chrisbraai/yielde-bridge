@@ -1,4 +1,5 @@
 import { listWebhooks } from "@/lib/config";
+import { Badge } from "@/components/badge";
 import { RegistryEmpty } from "@/components/registry-empty";
 import { RegistryHeader } from "@/components/registry-header";
 
@@ -103,16 +104,6 @@ export default async function WebhooksPage() {
 }
 
 function VerifyBadge({ verify }: { verify: string }) {
-  if (verify === "none") {
-    return (
-      <span className="inline-block px-2 py-0.5 text-xs rounded border font-mono border-amber-700/50 bg-amber-900/20 text-amber-400">
-        unsigned
-      </span>
-    );
-  }
-  return (
-    <span className="inline-block px-2 py-0.5 text-xs rounded border font-mono border-emerald-700/50 bg-emerald-900/20 text-emerald-400">
-      {verify}
-    </span>
-  );
+  if (verify === "none") return <Badge variant="warn">unsigned</Badge>;
+  return <Badge variant="success">{verify}</Badge>;
 }

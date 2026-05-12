@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { readSkill } from "@/lib/skills";
 import { renderMarkdown } from "@/lib/markdown";
+import { Badge } from "@/components/badge";
 
 export const dynamic = "force-dynamic";
 
@@ -112,21 +113,14 @@ function ChipList({
   items: string[];
   tone?: "warn";
 }) {
-  const cls =
-    tone === "warn"
-      ? "border-amber-800/60 bg-amber-900/20 text-amber-300"
-      : "border-zinc-800 bg-zinc-900 text-zinc-300";
   return (
     <div>
       <div className="text-xs text-zinc-500 mb-1.5">{label}</div>
       <div className="flex flex-wrap gap-1">
         {items.map((item) => (
-          <span
-            key={item}
-            className={`inline-block px-1.5 py-0.5 text-xs rounded border font-mono ${cls}`}
-          >
+          <Badge key={item} variant={tone === "warn" ? "warn" : "muted"} size="sm">
             {item}
-          </span>
+          </Badge>
         ))}
       </div>
     </div>

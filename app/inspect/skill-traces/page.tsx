@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { readUsage, historySeries } from "@/lib/usage";
 import { listSkills, type SkillSummary } from "@/lib/skills";
+import { Badge, type BadgeVariant } from "@/components/badge";
 import { UsageSparkline } from "@/components/usage-sparkline";
 import { RegistryHeader } from "@/components/registry-header";
 
@@ -83,14 +84,14 @@ export default async function SkillTracesPage() {
             <tbody>
               {rows.map((row) => {
                 const provenance = row.skill?.provenance ?? "orphan";
-                const provClass =
+                const provVariant: BadgeVariant =
                   provenance === "yielde-native"
-                    ? "border-blue-700/50 bg-blue-900/20 text-blue-300"
+                    ? "info"
                     : provenance === "hermes-import"
-                      ? "border-purple-700/50 bg-purple-900/20 text-purple-300"
+                      ? "accent"
                       : provenance === "orphan"
-                        ? "border-rose-700/50 bg-rose-900/20 text-rose-300"
-                        : "border-zinc-700 bg-zinc-900 text-zinc-400";
+                        ? "danger"
+                        : "muted";
                 return (
                   <tr key={row.name} className="border-t border-zinc-800 hover:bg-zinc-900/50">
                     <td className="px-4 py-2.5 font-mono text-zinc-100">
@@ -106,13 +107,7 @@ export default async function SkillTracesPage() {
                       )}
                     </td>
                     <td className="px-4 py-2.5">
-                      <span
-                        className={
-                          "inline-block px-2 py-0.5 text-xs rounded border font-mono " + provClass
-                        }
-                      >
-                        {provenance}
-                      </span>
+                      <Badge variant={provVariant}>{provenance}</Badge>
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono tabular-nums text-zinc-200">
                       {row.uses}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { listSkills } from "@/lib/skills";
+import { Badge, type BadgeVariant } from "@/components/badge";
 import { ImportHermesDialog } from "@/components/import-hermes-dialog";
 import { UsageSparkline } from "@/components/usage-sparkline";
 
@@ -89,16 +90,12 @@ export default async function SkillsPage() {
   );
 }
 
+const PROVENANCE_VARIANT: Record<string, BadgeVariant> = {
+  "yielde-native": "success",
+  "hermes-import": "info",
+  "auto-generated": "warn",
+};
+
 function ProvenanceBadge({ provenance }: { provenance: string }) {
-  const styles: Record<string, string> = {
-    "yielde-native": "border-emerald-700/50 bg-emerald-900/20 text-emerald-400",
-    "hermes-import": "border-blue-700/50 bg-blue-900/20 text-blue-400",
-    "auto-generated": "border-amber-700/50 bg-amber-900/20 text-amber-400",
-  };
-  const cls = styles[provenance] || "border-zinc-700 bg-zinc-900 text-zinc-400";
-  return (
-    <span className={`inline-block px-2 py-0.5 text-xs rounded border font-mono ${cls}`}>
-      {provenance}
-    </span>
-  );
+  return <Badge variant={PROVENANCE_VARIANT[provenance] ?? "muted"}>{provenance}</Badge>;
 }
