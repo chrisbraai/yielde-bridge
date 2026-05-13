@@ -1,8 +1,8 @@
 import "server-only";
-import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
-import { join, dirname } from "node:path";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { skillsRoot } from "./skills";
-import { stripBom } from "./json-io";
+import { stripBom, writeJsonAtomic } from "./json-io";
 
 const USAGE_VERSION = 1;
 const HISTORY_DAYS = 14;
@@ -47,13 +47,8 @@ export async function readUsage(): Promise<UsageFile> {
   }
 }
 
-// Atomic write: temp file + rename. Avoids torn writes if the process dies mid-flush.
 async function writeUsage(data: UsageFile): Promise<void> {
-  const path = usagePath();
-  await mkdir(dirname(path), { recursive: true });
-  const tmp = `${path}.${process.pid}.tmp`;
-  await writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
-  await rename(tmp, path);
+  await writeJsonAtomic(usagePath(), data);
 }
 
 function pruneHistory(history: Record<string, number>): Record<string, number> {

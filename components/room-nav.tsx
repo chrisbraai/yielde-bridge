@@ -7,6 +7,7 @@ const ROOMS = [
   { href: "/configure", label: "Configure" },
   { href: "/run", label: "Run" },
   { href: "/inspect", label: "Inspect" },
+  { href: "/library", label: "Library" },
 ] as const;
 
 export function RoomNav() {

@@ -6,13 +6,14 @@
 
 Yielde Bridge is the dashboard layer on top of **Yielde OS** (`~/.claude/os/`) and `/operator` (`~/.claude/operator/`). It does not replace either — it provides a human-friendly window into them, plus a new connector hub and skill library.
 
-Three rooms, modelled on Bridgemind's BridgeSpace pattern:
+Four rooms, modelled on Bridgemind's BridgeSpace pattern:
 
 | Room | What you do here |
 |---|---|
 | **Configure** | Register MCP servers, API connectors, webhooks, skills, secret references, capabilities. |
 | **Run** | See active sessions, `/operator` recent runs, webhook deliveries, cost meter, scheduled fires. |
 | **Inspect** | Search audit log, review `yielde-brain/_inbox/` drafts with diff + promote, see capability decisions, skill traces, eval scores. |
+| **Library** | Personal-use catalogue of every installed skill (`~/.claude/skills/`) and every operator agent (`~/.claude/operator/agents/`), searchable, with click-to-copy name pills. |
 
 ## What's live (Phase 3)
 

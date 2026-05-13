@@ -138,6 +138,49 @@ async function* walkSkills(root: string): AsyncGenerator<{ category: string; nam
   }
 }
 
+// Like walkSkills, but ALSO yields top-level skills laid out as `<root>/<name>/SKILL.md`
+// (the standard Claude Code layout used by the ECC bundle of ~190 skills). Nested category
+// dirs like `yielde/` and `hermes/` are still traversed at two levels.
+async function* walkAllSkills(root: string): AsyncGenerator<{ category: string; name: string; path: string }> {
+  let topEntries: string[];
+  try {
+    topEntries = await readdir(root);
+  } catch {
+    return;
+  }
+
+  for (const entry of topEntries) {
+    if (entry.startsWith(".") || entry === "INDEX.md") continue;
+    const entryPath = join(root, entry);
+    let st;
+    try { st = await stat(entryPath); } catch { continue; }
+    if (!st.isDirectory()) continue;
+
+    // Case 1: direct skill — has SKILL.md at this level
+    const directSkill = join(entryPath, "SKILL.md");
+    let hasDirect = false;
+    try { await stat(directSkill); hasDirect = true; } catch {}
+    if (hasDirect) {
+      yield { category: "core", name: entry, path: directSkill };
+      continue;
+    }
+
+    // Case 2: category dir — walk one level deeper
+    let names: string[];
+    try { names = await readdir(entryPath); } catch { continue; }
+    for (const name of names) {
+      if (name.startsWith(".")) continue;
+      const skillDir = join(entryPath, name);
+      let skillStat;
+      try { skillStat = await stat(skillDir); } catch { continue; }
+      if (!skillStat.isDirectory()) continue;
+      const skillFile = join(skillDir, "SKILL.md");
+      try { await stat(skillFile); } catch { continue; }
+      yield { category: entry, name, path: skillFile };
+    }
+  }
+}
+
 export async function listSkills(opts?: { category?: string }): Promise<SkillSummary[]> {
   const root = skillsRoot();
   const out: SkillSummary[] = [];
@@ -149,6 +192,46 @@ export async function listSkills(opts?: { category?: string }): Promise<SkillSum
   for await (const entry of walkSkills(root)) {
     if (opts?.category && entry.category !== opts.category) continue;
     const src = await readFile(entry.path, "utf8");
+    const { fm } = parseFrontmatter(src);
+    const skillName = fm.name || entry.name;
+    const u = usage[skillName];
+    out.push({
+      category: entry.category,
+      name: skillName,
+      description: fm.description || "",
+      provenance: (fm.provenance as string) || "unknown",
+      pinned: fm.pinned === true,
+      version: (fm.version as string) || "0.0.0",
+      uses: u?.uses ?? 0,
+      lastUsed: u?.last_used ?? null,
+      history: historySeries(u),
+    });
+  }
+
+  out.sort((a, b) => {
+    if (a.category !== b.category) return a.category.localeCompare(b.category);
+    return a.name.localeCompare(b.name);
+  });
+
+  return out;
+}
+
+/**
+ * Like listSkills, but includes top-level skills laid out as `<root>/<name>/SKILL.md`
+ * (the Claude Code default). Used by the Library room which surfaces ALL ~190 installed
+ * skills, not just curated yielde-native + hermes-import ones.
+ */
+export async function listAllSkills(): Promise<SkillSummary[]> {
+  const root = skillsRoot();
+  const out: SkillSummary[] = [];
+
+  const { readUsage, historySeries } = await import("./usage");
+  const usageFile = await readUsage();
+  const usage = usageFile.skills;
+
+  for await (const entry of walkAllSkills(root)) {
+    let src: string;
+    try { src = await readFile(entry.path, "utf8"); } catch { continue; }
     const { fm } = parseFrontmatter(src);
     const skillName = fm.name || entry.name;
     const u = usage[skillName];
