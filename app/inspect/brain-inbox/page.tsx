@@ -31,7 +31,7 @@ export default async function BrainInboxPage({
       <RegistryHeader
         title="Brain inbox"
         count={drafts.length}
-        source="yielde-brain/_inbox/"
+        source="yielde-brain-canonical/_inbox/"
         hint="read-only · /brain-log promote is Chris-only"
       />
 

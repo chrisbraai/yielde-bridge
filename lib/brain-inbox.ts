@@ -43,7 +43,8 @@ type BrainFrontmatter = {
 
 export function brainRoot(): string {
   if (process.env.YIELDE_BRAIN_ROOT) return process.env.YIELDE_BRAIN_ROOT;
-  return join(homedir(), "yielde-brain");
+  // Canonical brain clone (the markdown brain at ~/yielde-brain was retired 2026-05-23).
+  return join(homedir(), "yielde-brain-canonical");
 }
 
 export function brainInboxRoot(): string {
