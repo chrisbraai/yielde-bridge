@@ -138,9 +138,9 @@ function inline(s: string): string {
   out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   // Italic (single underscore or asterisk, but be careful not to match bold)
   out = out.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
-  // Links [text](url)
+  // Links [text](url) — neutralize javascript:/data:/vbscript: etc. (stored-XSS guard)
   out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, t, u) => {
-    return `<a href="${escapeAttr(u)}" target="_blank" rel="noopener">${t}</a>`;
+    return `<a href="${safeUrl(u)}" target="_blank" rel="noopener">${t}</a>`;
   });
   return out;
 }
@@ -154,4 +154,22 @@ function escapeHtml(s: string): string {
 
 function escapeAttr(s: string): string {
   return s.replace(/"/g, "&quot;");
+}
+
+// Allow only safe URL schemes in rendered links. Browsers ignore leading control chars/whitespace
+// when resolving a scheme, so strip those before probing. Relative URLs and anchors (no scheme) pass;
+// any explicit scheme other than http/https/mailto (e.g. javascript:, data:, vbscript:, file:) is
+// dropped to an inert "#".
+function safeUrl(u: string): string {
+  // Strip leading control chars/whitespace (browsers ignore them when resolving a scheme).
+  let probe = "";
+  for (const ch of u) {
+    if (ch.charCodeAt(0) > 32) probe += ch;
+  }
+  probe = probe.toLowerCase();
+  const scheme = probe.match(/^([a-z][a-z0-9+.-]*):/);
+  if (scheme && !["http", "https", "mailto"].includes(scheme[1]!)) {
+    return "#";
+  }
+  return escapeAttr(u);
 }
