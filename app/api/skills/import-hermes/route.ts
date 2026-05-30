@@ -12,7 +12,22 @@ function isSafeInput(input: string): boolean {
   // Allow either a bare slug (a-zA-Z0-9_-), a repo:path form, or a https URL
   if (/^[a-zA-Z0-9_-]+$/.test(input)) return true;
   if (/^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+:[\w./-]+$/.test(input)) return true;
-  if (/^https:\/\/[^\s'"`;|&$]+$/.test(input)) return true;
+  if (input.startsWith("https://")) {
+    // SSRF guard: only GitHub hosts may be fetched server-side (mirrors the script allowlist).
+    try {
+      const u = new URL(input);
+      const ALLOWED = new Set([
+        "raw.githubusercontent.com",
+        "github.com",
+        "api.github.com",
+        "objects.githubusercontent.com",
+        "codeload.github.com",
+      ]);
+      return u.protocol === "https:" && ALLOWED.has(u.hostname.toLowerCase());
+    } catch {
+      return false;
+    }
+  }
   return false;
 }
 
