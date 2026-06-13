@@ -376,3 +376,101 @@ export function runtimeStats(): { webhooks: number; operatorRuns: number; sessio
   const s = db().prepare(`SELECT COUNT(*) AS n FROM sessions`).get() as { n: number };
   return { webhooks: wh.n, operatorRuns: op.n, sessions: s.n };
 }
+
+// ---------- Read-only helpers for the cockpit (lib/cockpit) ----------
+// Added for the mission-control snapshot. These are pure reads; they never mutate state and never
+// touch the existing write/sync functions above. Date math uses SQLite's local-day functions so it
+// matches the cost rollup's day buckets and the deploy-log's local-day semantics.
+
+/**
+ * Count sessions whose started_at (fallback ended_at, matching listDailyCostBuckets) falls within
+ * the last 7 local days (today inclusive). Sessions with no usable timestamp are excluded.
+ */
+export function sessionsStartedSince(days = 7): number {
+  const startOffset = `-${days - 1} days`;
+  const row = db()
+    .prepare(
+      `SELECT COUNT(*) AS n
+       FROM sessions
+       WHERE COALESCE(started_at, ended_at) IS NOT NULL
+         AND date(substr(COALESCE(started_at, ended_at), 1, 10)) >= date('now', ?)`,
+    )
+    .get(startOffset) as { n: number } | undefined;
+  return row?.n ?? 0;
+}
+
+/**
+ * Top models by session COUNT over the last `days` local days. Sessions without a model are
+ * excluded (the kernel leaves model NULL until a session.cost event lands). Returns rows
+ * descending by count; the caller converts counts to share percentages.
+ */
+export function modelMixSince(days = 7, limit = 6): { model: string; count: number }[] {
+  const startOffset = `-${days - 1} days`;
+  return db()
+    .prepare(
+      `SELECT model, COUNT(*) AS count
+       FROM sessions
+       WHERE model IS NOT NULL AND model <> ''
+         AND COALESCE(started_at, ended_at) IS NOT NULL
+         AND date(substr(COALESCE(started_at, ended_at), 1, 10)) >= date('now', ?)
+       GROUP BY model
+       ORDER BY count DESC, model ASC
+       LIMIT ?`,
+    )
+    .all(startOffset, limit) as { model: string; count: number }[];
+}
+
+/**
+ * Average cost_cents across sessions in the last `days` local days that actually reported a cost.
+ * Returns null when no priced session exists in the window (cost telemetry is currently sparse —
+ * surface the gap honestly rather than dividing by total session count and lying low).
+ */
+export function avgSessionCostCentsSince(days = 7): number | null {
+  const startOffset = `-${days - 1} days`;
+  const row = db()
+    .prepare(
+      `SELECT AVG(cost_cents) AS avg, COUNT(cost_cents) AS priced
+       FROM sessions
+       WHERE cost_cents IS NOT NULL
+         AND COALESCE(started_at, ended_at) IS NOT NULL
+         AND date(substr(COALESCE(started_at, ended_at), 1, 10)) >= date('now', ?)`,
+    )
+    .get(startOffset) as { avg: number | null; priced: number } | undefined;
+  if (!row || row.priced === 0 || row.avg == null) return null;
+  return Math.round(row.avg);
+}
+
+/**
+ * Most-recently-started sessions that have a usable started_at, capped. Used for the cockpit's
+ * recent-run feed (merged with operator runs by the caller).
+ */
+export function listRecentSessions(limit = 20): SessionRowDb[] {
+  return db()
+    .prepare(
+      `SELECT id, harness, role, started_at, ended_at, model, tokens_in, tokens_out, cost_cents, intent
+       FROM sessions
+       WHERE started_at IS NOT NULL
+       ORDER BY started_at DESC
+       LIMIT ?`,
+    )
+    .all(limit) as SessionRowDb[];
+}
+
+/**
+ * Operator-run success/failure counts over the last `days` local days, bucketed by started_at.
+ * Only terminal statuses are counted; "running"/null are ignored.
+ */
+export function operatorRunOutcomesSince(days = 7): { succeeded: number; failed: number } {
+  const startOffset = `-${days - 1} days`;
+  const row = db()
+    .prepare(
+      `SELECT
+         SUM(CASE WHEN status = 'succeeded' THEN 1 ELSE 0 END) AS succeeded,
+         SUM(CASE WHEN status = 'failed'    THEN 1 ELSE 0 END) AS failed
+       FROM operator_runs
+       WHERE started_at IS NOT NULL
+         AND date(substr(started_at, 1, 10)) >= date('now', ?)`,
+    )
+    .get(startOffset) as { succeeded: number | null; failed: number | null } | undefined;
+  return { succeeded: row?.succeeded ?? 0, failed: row?.failed ?? 0 };
+}
