@@ -10,6 +10,9 @@ import type {
   AdvisorState,
   GatedItem,
   PrItem,
+  ConsistencyStreak,
+  HealthDomain,
+  LibrarySummary,
 } from "./types";
 import { getCockpitConfig } from "./config";
 import { getBuildShip, EMPTY_BUILD_SHIP } from "./build-ship";
@@ -18,6 +21,13 @@ import { getNorthStarAndAdvisor, EMPTY_NORTH_STAR, EMPTY_ADVISOR } from "./north
 import { getBurn, EMPTY_BURN } from "./burn";
 import { getFleet, EMPTY_FLEET } from "./fleet";
 import { getHealth, EMPTY_HEALTH } from "./health";
+import {
+  getConsistencyBoard,
+  getWellness,
+  EMPTY_CONSISTENCY,
+  EMPTY_WELLNESS,
+} from "./consistency";
+import { getLibrarySummary, EMPTY_LIBRARY } from "./library";
 
 // THE assembler. getCockpitSnapshot() fans out every source under Promise.allSettled so one slow or
 // failing source can't sink the whole cockpit — each rejection becomes a string in `errors[]`
@@ -134,14 +144,39 @@ export async function getCockpitSnapshot(now: Date = new Date()): Promise<Cockpi
   const fleetP = settle<Fleet>("fleet", () => getFleet(), EMPTY_FLEET, errors);
   const healthP = settle<Health>("health", () => getHealth(config, errors), EMPTY_HEALTH, errors);
 
-  const [buildShip, shipStreakRes, nsAdvisor, burn, fleet, health] = await Promise.all([
-    buildShipP,
-    shipStreakP,
-    nsAdvisorP,
-    burnP,
-    fleetP,
-    healthP,
-  ]);
+  // Consistency board (ship · ritual · workout · diet), wellness domain, and library counts — each
+  // settled independently so a missing health log / unreadable registry can't sink the cockpit.
+  const consistencyP = settle<ConsistencyStreak[]>(
+    "consistency",
+    () => getConsistencyBoard(now),
+    EMPTY_CONSISTENCY,
+    errors,
+  );
+  const wellnessP = settle<HealthDomain>(
+    "wellness",
+    () => getWellness(now),
+    EMPTY_WELLNESS,
+    errors,
+  );
+  const libraryP = settle<LibrarySummary>(
+    "library",
+    () => getLibrarySummary(),
+    EMPTY_LIBRARY,
+    errors,
+  );
+
+  const [buildShip, shipStreakRes, nsAdvisor, burn, fleet, health, consistency, wellness, library] =
+    await Promise.all([
+      buildShipP,
+      shipStreakP,
+      nsAdvisorP,
+      burnP,
+      fleetP,
+      healthP,
+      consistencyP,
+      wellnessP,
+      libraryP,
+    ]);
 
   const gated = deriveGated(buildShip, health);
 
@@ -155,6 +190,9 @@ export async function getCockpitSnapshot(now: Date = new Date()): Promise<Cockpi
     fleet,
     health,
     advisor: nsAdvisor.advisor,
+    consistency,
+    wellness,
+    library,
     errors,
   };
 }
@@ -164,6 +202,22 @@ export async function getCockpitSnapshot(now: Date = new Date()): Promise<Cockpi
 // Keep it small: the advisor doesn't need the full 14-day cadence array or every PR, just the
 // load-bearing signals to reason about "what should Chris do next".
 // ---------------------------------------------------------------------------
+// Compact per-lane consistency summary the advisor reasons over (and can log against). We drop the
+// 14-day boolean array and keep only the load-bearing scalars.
+export type ConsistencySummary = {
+  key: ConsistencyStreak["key"];
+  label: string;
+  current: number;
+  longest: number;
+  lastDate: string | null;
+  adherencePct: number | null;
+};
+
+export type WellnessSummary = {
+  workout: { current: number; planSummary: string | null; lastNote: string | null };
+  diet: { current: number; planSummary: string | null; lastNote: string | null };
+};
+
 export type AdvisorContext = {
   at: string;
   northStar: NorthStar;
@@ -181,11 +235,16 @@ export type AdvisorContext = {
   gated: GatedItem[];
   burnToday: { todayCents: number; activeSessions: number };
   fleetActive: number;
+  // Compact wellness + consistency so the advisor can reason about (and log) workout/diet/ritual.
+  consistency: ConsistencySummary[];
+  wellness: WellnessSummary;
   errors: string[];
 };
 
 export async function getAdvisorContext(now: Date = new Date()): Promise<AdvisorContext> {
   const snap = await getCockpitSnapshot(now);
+  const board = snap.consistency ?? [];
+  const wellness = snap.wellness ?? EMPTY_WELLNESS;
   return {
     at: snap.at,
     northStar: snap.northStar,
@@ -209,6 +268,26 @@ export async function getAdvisorContext(now: Date = new Date()): Promise<Advisor
     gated: snap.gated,
     burnToday: { todayCents: snap.burn.todayCents, activeSessions: snap.burn.activeSessions },
     fleetActive: snap.fleet.activeSessions,
+    consistency: board.map((s) => ({
+      key: s.key,
+      label: s.label,
+      current: s.current,
+      longest: s.longest,
+      lastDate: s.lastDate,
+      adherencePct: s.adherencePct,
+    })),
+    wellness: {
+      workout: {
+        current: wellness.workout.streak.current,
+        planSummary: wellness.workout.planSummary,
+        lastNote: wellness.workout.lastNote,
+      },
+      diet: {
+        current: wellness.diet.streak.current,
+        planSummary: wellness.diet.planSummary,
+        lastNote: wellness.diet.lastNote,
+      },
+    },
     errors: snap.errors,
   };
 }

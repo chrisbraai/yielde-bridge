@@ -24,6 +24,25 @@ body {
   font-family: var(--font-sans), system-ui, sans-serif;
 }
 
+/* Cockpit horizontal rails — a thin, calm scrollbar that doesn't fight the dark canvas.
+   Scroll itself is pure CSS overflow; this only styles the bar. WebKit + Firefox. */
+.rail-scroll {
+  scrollbar-color: #3f3f46 transparent;
+}
+.rail-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+.rail-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.rail-scroll::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 9999px;
+}
+.rail-scroll::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
 /* Markdown rendering for SKILL.md */
 .prose-skill h1 {
   font-size: 1.5rem;

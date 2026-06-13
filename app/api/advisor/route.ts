@@ -52,6 +52,11 @@ export async function POST(req: Request) {
       gated: [],
       burnToday: { todayCents: 0, activeSessions: 0 },
       fleetActive: 0,
+      consistency: [],
+      wellness: {
+        workout: { current: 0, planSummary: null, lastNote: null },
+        diet: { current: 0, planSummary: null, lastNote: null },
+      },
       errors: [`context: ${e instanceof Error ? e.message : String(e)}`],
     };
   }

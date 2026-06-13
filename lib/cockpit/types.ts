@@ -101,6 +101,33 @@ export type AdvisorState = {
   streak: number; // the showing-up (ritual) streak from the Day engine
 };
 
+// ---- Consistency (Chris explicitly values it) — ONE streak mechanic across domains ----
+export type ConsistencyKey = "ship" | "ritual" | "workout" | "diet";
+
+export type ConsistencyStreak = {
+  key: ConsistencyKey;
+  label: string;
+  current: number; // consecutive days; never-miss-twice forgiveness (like the ritual streak)
+  longest: number;
+  lastDate: string | null; // YYYY-MM-DD
+  history14: (boolean | null)[]; // length 14, oldest->newest: true=hit, false=miss, null=no data
+  adherencePct: number | null; // hits / tracked days over the window (workout/diet)
+};
+
+// Wellness domain (workout + diet) — kept DISTINCT from system `health` (services/deploy drift).
+export type HealthDomain = {
+  workout: { streak: ConsistencyStreak; planSummary: string | null; lastNote: string | null };
+  diet: { streak: ConsistencyStreak; planSummary: string | null; lastNote: string | null };
+};
+
+// Library counts for a cockpit header; the FULL lists are read directly by the UI from lib/skills|agents|scripts.
+export type LibrarySummary = {
+  skills: number;
+  agents: number;
+  scripts: number;
+  capabilitiesGranted: number;
+};
+
 export type CockpitSnapshot = {
   at: string; // ISO timestamp of assembly
   buildShip: BuildShip;
@@ -111,6 +138,9 @@ export type CockpitSnapshot = {
   fleet: Fleet;
   health: Health;
   advisor: AdvisorState;
+  consistency?: ConsistencyStreak[]; // ship, ritual, workout, diet — the consistency board
+  wellness?: HealthDomain; // workout + diet plans + streaks
+  library?: LibrarySummary; // skills/agents/scripts/capabilities counts
   errors: string[]; // non-fatal source failures — surfaced, never swallowed
 };
 
