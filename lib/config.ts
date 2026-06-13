@@ -84,6 +84,10 @@ export type Capability = {
   title: string;
   available: boolean;
   hardGate: boolean;
+  /** Confirm-gated: available but irreversible — a native prompt forces a human go/no-go. */
+  confirmGate?: boolean;
+  /** Affirmative (category G) lifecycle: "active" = installed + connected, "available" = free to install. */
+  status?: string;
   why?: string;
   refusal?: string;
   escalation?: string;
@@ -120,6 +124,8 @@ type CapabilitiesFile = {
     {
       category: string;
       available: boolean;
+      confirm_gate?: boolean;
+      status?: string;
       title: string;
       why?: string;
       refusal?: string;
@@ -175,6 +181,15 @@ export async function listSecretRefs(): Promise<SecretRef[]> {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/**
+ * Affirmative capability = something the agent CAN do (available). The Library Capabilities tab
+ * and its nav badge both surface only these; refusal boundaries (available:false) stay in the
+ * registry for the OS gate but are not displayed. Single definition so the tab and badge agree.
+ */
+export function isAffirmative(c: Capability): boolean {
+  return c.available;
+}
+
 export async function listCapabilities(): Promise<Capability[]> {
   const file = await readJsonOrDefault<CapabilitiesFile>(capabilitiesRegistryPath(), {
     capabilities: {},
@@ -187,6 +202,8 @@ export async function listCapabilities(): Promise<Capability[]> {
       title: v.title,
       available: v.available,
       hardGate: v.hard_gate === true,
+      confirmGate: v.confirm_gate === true,
+      status: v.status,
       why: v.why,
       refusal: v.refusal,
       escalation: v.escalation,
@@ -206,20 +223,17 @@ export async function registryCounts(): Promise<{
   api: number;
   webhooks: number;
   secrets: number;
-  capabilities: number;
 }> {
-  const [mcp, api, wh, refs, caps] = await Promise.all([
+  const [mcp, api, wh, refs] = await Promise.all([
     listMcpServers(),
     listApiConnectors(),
     listWebhooks(),
     listSecretRefs(),
-    listCapabilities(),
   ]);
   return {
     mcp: mcp.length,
     api: api.length,
     webhooks: wh.inbound.length + wh.outbound.length,
     secrets: refs.length,
-    capabilities: caps.length,
   };
 }

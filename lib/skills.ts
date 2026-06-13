@@ -258,19 +258,27 @@ export async function listAllSkills(): Promise<SkillSummary[]> {
 
 export async function readSkill(category: string, name: string): Promise<Skill | null> {
   const root = skillsRoot();
-  const path = join(root, category, name, "SKILL.md");
-  let src: string;
-  try {
-    src = await readFile(path, "utf8");
-  } catch {
-    return null;
+  // `walkAllSkills` synthesizes the "core" category for flat-root skills
+  // (`<root>/<name>/SKILL.md`). Mirror that fallback here so detail links work
+  // for both flat and nested layouts.
+  const candidates = category === "core"
+    ? [join(root, name, "SKILL.md"), join(root, "core", name, "SKILL.md")]
+    : [join(root, category, name, "SKILL.md")];
+  for (const path of candidates) {
+    let src: string;
+    try {
+      src = await readFile(path, "utf8");
+    } catch {
+      continue;
+    }
+    const { fm, body } = parseFrontmatter(src);
+    return {
+      category,
+      name: fm.name || name,
+      path,
+      frontmatter: fm,
+      body,
+    };
   }
-  const { fm, body } = parseFrontmatter(src);
-  return {
-    category,
-    name: fm.name || name,
-    path,
-    frontmatter: fm,
-    body,
-  };
+  return null;
 }

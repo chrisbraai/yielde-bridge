@@ -15,7 +15,7 @@
  *                     ~/.claude/operator/<target>/, append a run-intent line to
  *                     ~/.claude/operator/runs/<target>/<run-id>.jsonl and mark succeeded.
  *                     If the target dir is missing, fall through to github-issue.
- *   github-issue    — open a GitHub issue against chrisbraai/yielde-brain with the dispatch
+ *   github-issue    — open a GitHub issue against Yielde-dev/brain with the dispatch
  *                     payload + label `operator-request`. Tier-2 fallback for Devon/Lyell.
  *
  * Hard rules:
@@ -324,7 +324,7 @@ async function handleGithubIssue(req) {
     `Promote on the machine with the operator registry: \`/operator deploy ${req.target_skill}\`.`,
   ].join("\n");
 
-  const repo = process.env.YIELDE_BRAIN_REPO ?? "chrisbraai/yielde-brain";
+  const repo = process.env.YIELDE_BRAIN_REPO ?? "Yielde-dev/brain";
   const create = spawnSync(
     "gh",
     ["issue", "create", "--repo", repo, "--label", "operator-request", "--title", title, "--body", body],

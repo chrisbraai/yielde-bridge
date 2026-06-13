@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { togglePin, type PinKind } from "@/lib/pins";
 
-const VALID_KINDS: PinKind[] = ["skill", "agent"];
+const VALID_KINDS: PinKind[] = ["skill", "agent", "script"];
 // Permissive enough for kebab/snake/plugin-style names (`agents-md:cli`, `vercel:bootstrap`)
 // but rejects whitespace, slashes, and anything path-like.
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,150}$/;
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
 
   if (typeof kind !== "string" || !VALID_KINDS.includes(kind as PinKind)) {
     return NextResponse.json(
-      { error: "kind must be 'skill' or 'agent'" },
+      { error: "kind must be 'skill', 'agent', or 'script'" },
       { status: 400 }
     );
   }

@@ -10,18 +10,18 @@ Four rooms, modelled on Bridgemind's BridgeSpace pattern:
 
 | Room | What you do here |
 |---|---|
-| **Configure** | Register MCP servers, API connectors, webhooks, skills, secret references, capabilities. |
+| **Configure** | Register MCP servers, API connectors, webhooks, secret references. |
 | **Run** | See active sessions, `/operator` recent runs, webhook deliveries, cost meter, scheduled fires. |
 | **Inspect** | Search audit log, review `yielde-brain/_inbox/` drafts with diff + promote, see capability decisions, skill traces, eval scores. |
-| **Library** | Personal-use catalogue of every installed skill (`~/.claude/skills/`) and every operator agent (`~/.claude/operator/agents/`), searchable, with click-to-copy name pills. |
+| **Library** | Personal-use catalogue of every installed skill (`~/.claude/skills/`), operator agent (`~/.claude/operator/agents/`), deterministic script (`~/.claude/scripts/`), and Yielde-OS capability (`~/.claude/os/capabilities/registry.json`). Click-to-copy pills (name for skills/agents, runnable command for scripts); capabilities render as a grouped table. |
 
 ## What's live (Phase 3)
 
 ### Configure room (Phase 2)
-- Three-room navigation chrome with live count badges on each Configure panel.
-- **Configure / Skills** — reads `~/.claude/skills/` from filesystem, lists every installed skill with provenance badge, 14-day usage sparkline, and a per-skill viewer rendering the SKILL.md body with full frontmatter sidebar.
+- Four-room navigation chrome with live count badges on each Configure panel.
 - **Configure / MCP, API, Webhooks, Secret refs** — read `yielde-bridge-config/{mcp,api,webhook,secret-refs}.json` and render typed tables. Empty registries surface the `bridge` CLI hint inline.
-- **Configure / Capabilities** — read-only mirror of `~/.claude/os/capabilities/registry.json`, grouped by category A–F with `allowed` / `refused` / `hard-gate` badges per row.
+- **Library / Skills** — reads `~/.claude/skills/` from filesystem, click-to-copy cards with provenance + curator-pin + usage badges. Each card has a "view more →" pill that opens `/library/skills/[category]/[name]` — the SKILL.md body rendered as HTML with a frontmatter sidebar (provenance, version, tags, related-skills, requires-tools/capabilities, invoke snippet, source path).
+- **Library / Capabilities** — read-only mirror of `~/.claude/os/capabilities/registry.json`, grouped by category A–F with `allowed` / `refused` / `hard-gate` badges per row.
 - **Import-from-Hermes** modal — accepts a slug, `owner/repo:path`, or full GitHub URL; calls `POST /api/skills/import-hermes`.
 - **Usage telemetry** — `POST /api/skills/use { name }` increments a 14-day rolling history in `~/.claude/skills/.usage.json`.
 - **`bridge` CLI** — `node scripts/bridge.mjs sync|list|add|remove …` mutates `yielde-bridge-config/` via git, with a regex-based secret-leak guard.

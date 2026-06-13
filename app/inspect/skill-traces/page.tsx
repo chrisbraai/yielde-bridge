@@ -97,7 +97,7 @@ export default async function SkillTracesPage() {
                     <td className="px-4 py-2.5 font-mono text-zinc-100">
                       {row.skill ? (
                         <Link
-                          href={`/configure/skills?skill=${encodeURIComponent(row.name)}`}
+                          href="/library/skills"
                           className="hover:text-blue-400"
                         >
                           {row.name}

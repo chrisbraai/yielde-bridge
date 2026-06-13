@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Badge, type BadgeVariant } from "@/components/badge";
 
@@ -10,9 +11,18 @@ export type LibraryItem = {
   category: string;
   pinned: boolean;
   badges?: Array<{ label: string; variant: BadgeVariant; title?: string }>;
+  // Optional override for what gets copied (defaults to `name`). Used by the
+  // Scripts tab to copy a runnable command instead of just the script name.
+  copyText?: string;
+  // Optional route to a detail view. When set, the card shows a "view more"
+  // pill in the bottom-right corner.
+  detailHref?: string;
+  // Full filesystem path for the DELETE API. Agents + scripts pass their path;
+  // skills omit it (API reconstructs from category + name).
+  removePath?: string;
 };
 
-type Kind = "skill" | "agent";
+type Kind = "skill" | "agent" | "script";
 
 export function LibraryList({
   items,
@@ -62,6 +72,8 @@ function LibraryColumn({
   const [query, setQuery] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
   const [pending, setPending] = useState<Set<string>>(new Set());
+  const [confirming, setConfirming] = useState<Set<string>>(new Set());
+  const confirmTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [, startTransition] = useTransition();
   const router = useRouter();
 
@@ -128,6 +140,42 @@ function LibraryColumn({
     }
   }
 
+  async function removeItem(name: string, removePath?: string) {
+    setPending((prev) => { const next = new Set(prev); next.add(name); return next; });
+    try {
+      const res = await fetch("/api/library/remove", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind, name, category, removePath }),
+      });
+      if (!res.ok) {
+        console.error("remove failed", await res.text());
+        return;
+      }
+      startTransition(() => router.refresh());
+    } finally {
+      setPending((prev) => { const next = new Set(prev); next.delete(name); return next; });
+    }
+  }
+
+  function handleRemoveClick(name: string, removePath?: string) {
+    if (confirming.has(name)) {
+      // Second click — execute
+      clearTimeout(confirmTimers.current.get(name));
+      confirmTimers.current.delete(name);
+      setConfirming((prev) => { const next = new Set(prev); next.delete(name); return next; });
+      void removeItem(name, removePath);
+    } else {
+      // First click — arm the confirm state, auto-reset after 2.5 s
+      setConfirming((prev) => { const next = new Set(prev); next.add(name); return next; });
+      const t = setTimeout(() => {
+        setConfirming((prev) => { const next = new Set(prev); next.delete(name); return next; });
+        confirmTimers.current.delete(name);
+      }, 2500);
+      confirmTimers.current.set(name, t);
+    }
+  }
+
   return (
     <section className="flex flex-col border border-zinc-800 rounded-lg bg-zinc-950/40 min-h-0 max-h-[calc(100vh-220px)]">
       <header className="px-3 pt-3 pb-2 border-b border-zinc-800 flex-shrink-0">
@@ -172,16 +220,21 @@ function LibraryColumn({
             No matches for “{query}”.
           </div>
         ) : (
-          filtered.map((it) => (
-            <ItemCard
-              key={it.name}
-              item={it}
-              copied={copied === it.name}
-              pending={pending.has(it.name)}
-              onCopy={() => copy(it.name)}
-              onTogglePin={() => togglePin(it.name)}
-            />
-          ))
+          filtered.map((it) => {
+            const text = it.copyText ?? it.name;
+            return (
+              <ItemCard
+                key={it.name}
+                item={it}
+                copied={copied === text}
+                pending={pending.has(it.name)}
+                confirming={confirming.has(it.name)}
+                onCopy={() => copy(text)}
+                onTogglePin={() => togglePin(it.name)}
+                onRemove={() => handleRemoveClick(it.name, it.removePath)}
+              />
+            );
+          })
         )}
       </div>
     </section>
@@ -189,9 +242,14 @@ function LibraryColumn({
 }
 
 function createPrompt(kind: Kind, category: string): string {
-  return kind === "skill"
-    ? `/skill-create  # category: ${category}`
-    : `/operator:create  # runtime: ${category}`;
+  switch (kind) {
+    case "skill":
+      return `/skill-create  # category: ${category}`;
+    case "agent":
+      return `/operator:create  # runtime: ${category}`;
+    case "script":
+      return `# new ${category} script → ~/.claude/scripts/${category}/`;
+  }
 }
 
 function CreateCard({
@@ -205,7 +263,12 @@ function CreateCard({
   copied: boolean;
   onCopy: () => void;
 }) {
-  const label = kind === "skill" ? `New ${category} skill` : `New ${category} agent`;
+  const label =
+    kind === "skill"
+      ? `New ${category} skill`
+      : kind === "agent"
+      ? `New ${category} agent`
+      : `New ${category} script`;
   const command = createPrompt(kind, category);
   return (
     <button
@@ -271,14 +334,18 @@ function ItemCard({
   item,
   copied,
   pending,
+  confirming,
   onCopy,
   onTogglePin,
+  onRemove,
 }: {
   item: LibraryItem;
   copied: boolean;
   pending: boolean;
+  confirming: boolean;
   onCopy: () => void;
   onTogglePin: () => void;
+  onRemove: () => void;
 }) {
   return (
     <div
@@ -294,8 +361,11 @@ function ItemCard({
       <button
         type="button"
         onClick={onCopy}
-        title={`Click to copy “${item.name}” to clipboard`}
-        className="w-full text-left p-2.5 pr-12 cursor-pointer"
+        title={`Click to copy "${item.copyText ?? item.name}" to clipboard`}
+        className={
+          "w-full text-left p-2.5 pr-16 cursor-pointer " +
+          (item.detailHref ? "pb-7" : "")
+        }
       >
         <div className="flex items-center gap-2 mb-1">
           <span className="font-mono text-xs text-zinc-100 group-hover:text-blue-300 truncate">
@@ -323,6 +393,26 @@ function ItemCard({
         type="button"
         onClick={(e) => {
           e.stopPropagation();
+          if (!pending) onRemove();
+        }}
+        disabled={pending}
+        aria-label={confirming ? `Confirm remove ${item.name}` : `Remove ${item.name}`}
+        title={confirming ? "Click again to confirm" : "Remove"}
+        className={
+          "absolute top-1.5 right-8 w-6 h-6 rounded grid place-items-center transition-all text-sm " +
+          (confirming
+            ? "text-red-400 bg-red-900/30 border border-red-700/50 opacity-100"
+            : "text-zinc-600 opacity-0 group-hover:opacity-100 hover:bg-zinc-800 hover:text-red-400") +
+          (pending ? " opacity-50 cursor-wait" : " cursor-pointer")
+        }
+      >
+        ×
+      </button>
+
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
           if (!pending) onTogglePin();
         }}
         disabled={pending}
@@ -339,6 +429,16 @@ function ItemCard({
       >
         <PinIcon filled={item.pinned} />
       </button>
+
+      {item.detailHref && (
+        <Link
+          href={item.detailHref}
+          title={`Open ${item.name} detail`}
+          className="absolute bottom-1.5 right-1.5 text-[10px] font-mono px-1.5 py-0.5 rounded border border-zinc-800 text-zinc-500 bg-zinc-950/60 hover:text-zinc-100 hover:border-zinc-600 hover:bg-zinc-900 transition-colors"
+        >
+          view more →
+        </Link>
+      )}
     </div>
   );
 }

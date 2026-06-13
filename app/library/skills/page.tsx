@@ -25,12 +25,14 @@ export default async function LibrarySkillsPage() {
     }
     if (s.pinned) badges.push({ label: "curator-pin", variant: "accent" });
     if ((s.uses ?? 0) > 0) badges.push({ label: `${s.uses} use${s.uses === 1 ? "" : "s"}`, variant: "muted" });
+    const category = s.category || "core";
     return {
       name: s.name,
       description: s.description,
-      category: s.category || "core",
+      category,
       pinned: pinned.has(s.name),
       badges,
+      detailHref: `/library/skills/${encodeURIComponent(category)}/${encodeURIComponent(s.name)}`,
     };
   });
 
@@ -40,7 +42,7 @@ export default async function LibrarySkillsPage() {
         <h1 className="text-xl font-semibold text-zinc-100">Skills</h1>
         <p className="text-sm text-zinc-500 mt-1">
           Every installed skill in <code className="text-zinc-400 text-xs">~/.claude/skills/</code>.
-          Click a card to copy its name; click the pin to lock it to the top of its column.
+          Click a card to copy its name, the pin to lock it to the top, or “view more →” to open the SKILL.md viewer.
         </p>
       </header>
       <LibraryList items={items} kind="skill" />

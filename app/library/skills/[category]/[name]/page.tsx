@@ -6,7 +6,7 @@ import { Badge } from "@/components/badge";
 
 export const dynamic = "force-dynamic";
 
-export default async function SkillDetailPage({
+export default async function LibrarySkillDetailPage({
   params,
 }: {
   params: Promise<{ category: string; name: string }>;
@@ -24,7 +24,7 @@ export default async function SkillDetailPage({
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
       <article>
         <Link
-          href="/configure/skills"
+          href="/library/skills"
           className="text-xs text-zinc-500 hover:text-zinc-300 inline-block mb-4"
         >
           ← All skills

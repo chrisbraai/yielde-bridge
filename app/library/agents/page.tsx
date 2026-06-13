@@ -50,6 +50,7 @@ export default async function LibraryAgentsPage() {
       category: a.runtime,
       pinned: pinned.has(a.name),
       badges,
+      removePath: a.path,
     };
   });
 
