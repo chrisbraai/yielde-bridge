@@ -220,6 +220,6 @@ export function shipStreak(events: DeployEvent[], now: Date = new Date()): ShipS
  * the originating commit timestamp, so we can't derive a real median without extra git lookups.
  * Kept as a stub so the field exists and the caller surfaces null honestly until the data lands.
  */
-export function leadTimeDays(_events: DeployEvent[]): number | null {
+export function leadTimeDays(): number | null {
   return null;
 }

@@ -26,7 +26,7 @@ const EMPTY_BURN: Burn = {
   modelMix: [],
 };
 
-export async function getBurn(now: Date = new Date()): Promise<Burn> {
+export async function getBurn(): Promise<Burn> {
   // Best-effort syncs — never let a sync failure sink the slice.
   await syncSessionsFromAudit().catch(() => undefined);
   await syncOperatorRuns().catch(() => undefined);

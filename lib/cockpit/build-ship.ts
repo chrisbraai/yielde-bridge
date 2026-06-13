@@ -198,7 +198,7 @@ export async function getBuildShip(
     shippedThisWeek: shippedThisWeek(deployEvents, now),
     daysSinceDeploy: daysSinceDeploy(deployEvents, now),
     deployCadence14: deployCadence14(deployEvents, now),
-    leadTimeDays: leadTimeDays(deployEvents),
+    leadTimeDays: leadTimeDays(),
   };
 }
 

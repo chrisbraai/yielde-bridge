@@ -130,7 +130,7 @@ export async function getCockpitSnapshot(now: Date = new Date()): Promise<Cockpi
     errors,
   );
 
-  const burnP = settle<Burn>("burn", () => getBurn(now), EMPTY_BURN, errors);
+  const burnP = settle<Burn>("burn", () => getBurn(), EMPTY_BURN, errors);
   const fleetP = settle<Fleet>("fleet", () => getFleet(), EMPTY_FLEET, errors);
   const healthP = settle<Health>("health", () => getHealth(config, errors), EMPTY_HEALTH, errors);
 
