@@ -3,7 +3,14 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { stripBom, readJsonOrDefault } from "../json-io";
-import type { ConsistencyKey, ConsistencyStreak, HealthDomain } from "./types";
+import type {
+  ConsistencyKey,
+  ConsistencyStreak,
+  HealthDomain,
+  WorkoutSession,
+  WorkoutExercise,
+  DietMacros,
+} from "./types";
 import { localDateOf, addLocalDays, dayDiff, readDeployEvents, deployDays } from "./deploy-log";
 
 // ---------------------------------------------------------------------------
@@ -187,15 +194,90 @@ async function readHealthEntries(path = healthLogPath()): Promise<HealthEntry[]>
   return parseHealthLines(raw);
 }
 
+// The OLD shape was just { workout:{summary}, diet:{summary} }. The NEW rich shape adds a dated
+// `workout.sessions[]` powerlifting block and `diet.byWeekday` macro targets. Every rich field is
+// optional and parsed defensively below — a malformed/missing field falls back to null, never throws.
+type RawWorkoutExercise = { name?: unknown; sets?: unknown };
+type RawWorkoutSession = { date?: unknown; label?: unknown; exercises?: unknown };
+type RawMacros = { kcal?: unknown; protein?: unknown; carbs?: unknown; fat?: unknown };
 type HealthPlans = {
-  workout?: { summary?: string | null; targetPerWeek?: number } | null;
-  diet?: { summary?: string | null; rules?: unknown[] } | null;
+  workout?: {
+    summary?: string | null;
+    targetPerWeek?: number;
+    program?: unknown;
+    sessions?: unknown;
+  } | null;
+  diet?: {
+    summary?: string | null;
+    rules?: unknown[];
+    byWeekday?: unknown;
+  } | null;
 };
 
 function planSummary(plan: { summary?: string | null } | null | undefined): string | null {
   if (!plan || typeof plan.summary !== "string") return null;
   const s = plan.summary.trim();
   return s.length > 0 ? s : null;
+}
+
+// Local weekday key for a Date — index by getDay() (0=Sunday). LOCAL day, matching the cockpit's
+// localDateOf() convention (never UTC).
+const WEEKDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+// Display order for the week strip (Mon → Sun), independent of getDay()'s Sunday-first ordering.
+const WEEK_STRIP_ORDER = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+
+function nonEmptyString(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim();
+  return s.length > 0 ? s : null;
+}
+
+/** Parse one macro block to DietMacros — all four keys must be finite numbers, else null. Pure. */
+function parseMacros(raw: unknown): DietMacros | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as RawMacros;
+  const nums = [r.kcal, r.protein, r.carbs, r.fat];
+  if (!nums.every((n) => typeof n === "number" && Number.isFinite(n))) return null;
+  return {
+    kcal: r.kcal as number,
+    protein: r.protein as number,
+    carbs: r.carbs as number,
+    fat: r.fat as number,
+  };
+}
+
+/** Parse one raw session into a WorkoutSession (date may be null), or null if unusable. Pure. */
+function parseSession(raw: unknown): WorkoutSession | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as RawWorkoutSession;
+  const label = nonEmptyString(r.label);
+  if (label == null) return null; // a session with no label isn't renderable
+  const date = typeof r.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.date) ? r.date : null;
+  const exercises: WorkoutExercise[] = [];
+  if (Array.isArray(r.exercises)) {
+    for (const ex of r.exercises) {
+      if (!ex || typeof ex !== "object") continue;
+      const e = ex as RawWorkoutExercise;
+      const name = nonEmptyString(e.name);
+      if (name == null) continue;
+      const sets = Array.isArray(e.sets)
+        ? e.sets.filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+        : [];
+      exercises.push({ name, sets });
+    }
+  }
+  return { date, label, exercises };
+}
+
+/** All renderable sessions from the plan, in input order. Pure. */
+function parseSessions(raw: unknown): WorkoutSession[] {
+  if (!Array.isArray(raw)) return [];
+  const out: WorkoutSession[] = [];
+  for (const s of raw) {
+    const parsed = parseSession(s);
+    if (parsed) out.push(parsed);
+  }
+  return out;
 }
 
 /** Earliest tracked day for a kind (its first appearance in the log), or null. */
@@ -252,16 +334,56 @@ export async function getWellness(now: Date = new Date()): Promise<HealthDomain>
     startDate: dietStart,
   });
 
+  // ---- Rich plan fields (date/weekday-aware). Defensive: anything malformed/absent → null. ----
+  const today = localDateOf(now);
+  const program = nonEmptyString(plans.workout?.program);
+  const sessions = parseSessions(plans.workout?.sessions);
+
+  // today's session = the dated session whose date === today (rest day → null).
+  const todaySession = sessions.find((s) => s.date === today) ?? null;
+  // next session = earliest dated session strictly AFTER today (the "what's next" peek).
+  let nextSession: WorkoutSession | null = null;
+  for (const s of sessions) {
+    if (s.date == null) continue;
+    if (dayDiff(s.date, today) <= 0) continue; // not strictly after today
+    if (nextSession == null || dayDiff(s.date, nextSession.date as string) < 0) nextSession = s;
+  }
+
+  // today's macros = byWeekday[weekdayKey] for the LOCAL day-of-week.
+  const byWeekday =
+    plans.diet?.byWeekday && typeof plans.diet.byWeekday === "object"
+      ? (plans.diet.byWeekday as Record<string, unknown>)
+      : null;
+  const weekdayKey = WEEKDAY_KEYS[now.getDay()]!;
+  const todayMacros = byWeekday ? parseMacros(byWeekday[weekdayKey]) : null;
+
+  // week strip = mon..sun with whatever macros parse (skip missing); null if the table is absent.
+  let weekMacros: { weekday: string; macros: DietMacros }[] | null = null;
+  if (byWeekday) {
+    const strip: { weekday: string; macros: DietMacros }[] = [];
+    for (const wd of WEEK_STRIP_ORDER) {
+      const m = parseMacros(byWeekday[wd]);
+      if (m) strip.push({ weekday: wd, macros: m });
+    }
+    weekMacros = strip.length > 0 ? strip : null;
+  }
+
   return {
     workout: {
       streak: workoutStreak,
       planSummary: planSummary(plans.workout),
       lastNote: lastNoteOf(entries, "workout"),
+      program,
+      todaySession,
+      nextSession,
     },
     diet: {
       streak: dietStreak,
       planSummary: planSummary(plans.diet),
       lastNote: lastNoteOf(entries, "diet"),
+      todayMacros,
+      weekday: byWeekday ? weekdayKey : null,
+      weekMacros,
     },
   };
 }

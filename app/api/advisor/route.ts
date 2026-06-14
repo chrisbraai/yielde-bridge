@@ -54,8 +54,16 @@ export async function POST(req: Request) {
       fleetActive: 0,
       consistency: [],
       wellness: {
-        workout: { current: 0, planSummary: null, lastNote: null },
-        diet: { current: 0, planSummary: null, lastNote: null },
+        workout: {
+          current: 0,
+          planSummary: null,
+          lastNote: null,
+          program: null,
+          todayLabel: null,
+          todayTopLift: null,
+          nextLabel: null,
+        },
+        diet: { current: 0, planSummary: null, lastNote: null, todayMacros: null, weekday: null },
       },
       errors: [`context: ${e instanceof Error ? e.message : String(e)}`],
     };

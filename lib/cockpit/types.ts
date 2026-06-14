@@ -114,10 +114,31 @@ export type ConsistencyStreak = {
   adherencePct: number | null; // hits / tracked days over the window (workout/diet)
 };
 
+// Structured training plan (a dated powerlifting peak block) + per-weekday diet macros.
+export type WorkoutExercise = { name: string; sets: string[] };
+export type WorkoutSession = { date: string | null; label: string; exercises: WorkoutExercise[] };
+export type DietMacros = { kcal: number; protein: number; carbs: number; fat: number };
+
 // Wellness domain (workout + diet) — kept DISTINCT from system `health` (services/deploy drift).
+// The rich plan fields are optional: when a structured health-plans.json is present they carry
+// TODAY's session + TODAY's macros (date/weekday-aware); when absent the panel falls back to summary.
 export type HealthDomain = {
-  workout: { streak: ConsistencyStreak; planSummary: string | null; lastNote: string | null };
-  diet: { streak: ConsistencyStreak; planSummary: string | null; lastNote: string | null };
+  workout: {
+    streak: ConsistencyStreak;
+    planSummary: string | null;
+    lastNote: string | null;
+    program?: string | null; // e.g. "LINEAR 6 WEEK PEAK — Block 1"
+    todaySession?: WorkoutSession | null; // the session dated today, or null (rest / none)
+    nextSession?: WorkoutSession | null; // the next upcoming dated session
+  };
+  diet: {
+    streak: ConsistencyStreak;
+    planSummary: string | null;
+    lastNote: string | null;
+    todayMacros?: DietMacros | null; // today's weekday macro target
+    weekday?: string | null; // "mon".."sun"
+    weekMacros?: { weekday: string; macros: DietMacros }[] | null; // mon..sun for a strip
+  };
 };
 
 // Library counts for a cockpit header; the FULL lists are read directly by the UI from lib/skills|agents|scripts.

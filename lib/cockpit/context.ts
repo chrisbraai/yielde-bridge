@@ -12,6 +12,7 @@ import type {
   PrItem,
   ConsistencyStreak,
   HealthDomain,
+  WorkoutSession,
   LibrarySummary,
 } from "./types";
 import { getCockpitConfig } from "./config";
@@ -214,8 +215,26 @@ export type ConsistencySummary = {
 };
 
 export type WellnessSummary = {
-  workout: { current: number; planSummary: string | null; lastNote: string | null };
-  diet: { current: number; planSummary: string | null; lastNote: string | null };
+  workout: {
+    current: number;
+    planSummary: string | null;
+    lastNote: string | null;
+    // Today's training, COMPACT: the session label + a one-line top-lift summary (top movement +
+    // its heaviest set) so the advisor can say "you've got squats today (Week 3 Day 1, top single
+    // 205kg)". null when today is a rest day / no structured plan.
+    program: string | null;
+    todayLabel: string | null;
+    todayTopLift: string | null;
+    nextLabel: string | null;
+  };
+  diet: {
+    current: number;
+    planSummary: string | null;
+    lastNote: string | null;
+    // Today's macro targets (weekday-keyed), compact. null when no per-weekday table is present.
+    todayMacros: { kcal: number; protein: number; carbs: number; fat: number } | null;
+    weekday: string | null;
+  };
 };
 
 export type AdvisorContext = {
@@ -240,6 +259,24 @@ export type AdvisorContext = {
   wellness: WellnessSummary;
   errors: string[];
 };
+
+// One-line top-lift summary for the advisor: the session's first (primary) movement + its heaviest
+// set line, e.g. "Squat — 2×1 @ 205kg (102.5%)". Kept COMPACT (one lift, one set) — the advisor
+// doesn't need every set. Returns null for a rest day / empty session.
+function topLiftSummary(session: WorkoutSession | null | undefined): string | null {
+  if (!session || session.exercises.length === 0) return null;
+  const top = session.exercises[0]!;
+  if (top.sets.length === 0) return top.name;
+  // Pick the set with the highest kg number (best-effort parse of "…@ NNNkg…"); fall back to first.
+  const heaviest = top.sets.reduce((best, s) => {
+    const w = (str: string): number => {
+      const m = str.match(/(\d+(?:\.\d+)?)\s*kg/i);
+      return m ? parseFloat(m[1]!) : -1;
+    };
+    return w(s) > w(best) ? s : best;
+  }, top.sets[0]!);
+  return `${top.name} — ${heaviest}`;
+}
 
 export async function getAdvisorContext(now: Date = new Date()): Promise<AdvisorContext> {
   const snap = await getCockpitSnapshot(now);
@@ -281,11 +318,17 @@ export async function getAdvisorContext(now: Date = new Date()): Promise<Advisor
         current: wellness.workout.streak.current,
         planSummary: wellness.workout.planSummary,
         lastNote: wellness.workout.lastNote,
+        program: wellness.workout.program ?? null,
+        todayLabel: wellness.workout.todaySession?.label ?? null,
+        todayTopLift: topLiftSummary(wellness.workout.todaySession),
+        nextLabel: wellness.workout.nextSession?.label ?? null,
       },
       diet: {
         current: wellness.diet.streak.current,
         planSummary: wellness.diet.planSummary,
         lastNote: wellness.diet.lastNote,
+        todayMacros: wellness.diet.todayMacros ?? null,
+        weekday: wellness.diet.weekday ?? null,
       },
     },
     errors: snap.errors,
