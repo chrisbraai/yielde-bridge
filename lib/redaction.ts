@@ -13,6 +13,20 @@ export type RedactionResult = {
 
 const DEFAULT_REPLACEMENT = "[REDACTED]";
 
+// Default-on secret shapes (character-class only, no backslash escapes). Each is high-precision to
+// avoid mangling legitimate payloads. Bridge stores webhook bodies at rest, so these run on EVERY
+// body even when a webhook has no per-rule config (AGENTS.md rule 2: never store credential values).
+const DEFAULT_SECRET_PATTERNS: RegExp[] = [
+  /AKIA[0-9A-Z]{16}/g,
+  /sk-[A-Za-z0-9]{20,}/g,
+  /xox[abprs]-[0-9A-Za-z-]{10,}/g,
+  /gh[opsur]_[0-9A-Za-z]{36}/g,
+  /github_pat_[0-9A-Za-z_]{20,}/g,
+  /[sr]k_live_[0-9A-Za-z]{16,}/g,
+  /eyJ[0-9A-Za-z._-]{30,}/g,
+  /AIza[0-9A-Za-z._-]{30,}/g,
+];
+
 function redactKeyInObject(node: unknown, keyName: string, replacement: string): boolean {
   if (Array.isArray(node)) {
     let touched = false;
@@ -38,16 +52,17 @@ function redactKeyInObject(node: unknown, keyName: string, replacement: string):
 }
 
 export function redactBody(body: Buffer | null, rules: RedactionRule[] | undefined): RedactionResult {
-  if (!body || !rules || rules.length === 0) {
+  if (!body) {
     return { body, applied: false, notes: [] };
   }
 
   const notes: string[] = [];
   let applied = false;
   let working: Buffer = Buffer.from(body);
+  const ruleList = rules ?? [];
 
   // First pass: try to parse as JSON and apply key-based rules in-place.
-  const keyRules = rules.filter((r) => r.key);
+  const keyRules = ruleList.filter((r) => r.key);
   if (keyRules.length > 0) {
     try {
       const text = working.toString("utf8");
@@ -69,8 +84,8 @@ export function redactBody(body: Buffer | null, rules: RedactionRule[] | undefin
     }
   }
 
-  // Second pass: regex rules against the (possibly already key-redacted) body.
-  const patternRules = rules.filter((r) => r.pattern);
+  // Second pass: explicit per-webhook regex rules.
+  const patternRules = ruleList.filter((r) => r.pattern);
   if (patternRules.length > 0) {
     let text = working.toString("utf8");
     for (const rule of patternRules) {
@@ -88,6 +103,23 @@ export function redactBody(body: Buffer | null, rules: RedactionRule[] | undefin
       }
     }
     working = Buffer.from(text);
+  }
+
+  // Final pass (default-on): always scrub high-precision secret shapes over the full body text,
+  // whether or not it parsed as JSON and whether or not any per-webhook rule matched.
+  {
+    let text = working.toString("utf8");
+    let touched = false;
+    for (const re of DEFAULT_SECRET_PATTERNS) {
+      const before = text;
+      text = text.replace(re, DEFAULT_REPLACEMENT);
+      if (text !== before) touched = true;
+    }
+    if (touched) {
+      applied = true;
+      notes.push("default-secret-scan");
+      working = Buffer.from(text);
+    }
   }
 
   return { body: working, applied, notes };
